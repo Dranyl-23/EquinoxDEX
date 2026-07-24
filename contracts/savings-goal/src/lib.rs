@@ -1,5 +1,5 @@
 #![no_std]
-//! Savings Goal — a tiny Soroban contract for the StellarX PUP workshop.
+//! Savings Goal — a tiny Soroban contract for the StellarX workshop.
 //!
 //! It tracks a savings *target* and the running *saved* total. It is deliberately
 //! simple (plain integer state, no token transfers) so it always works in a live

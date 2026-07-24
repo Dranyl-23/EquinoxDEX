@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StellarX Starter — PUP Workshop",
+  title: "StellarX Starter",
   description: "Wallet, payments, and a Soroban contract on Stellar testnet.",
 };
 

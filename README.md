@@ -1,6 +1,6 @@
 # StellarX Workshop Starter
 
-A ready-to-run scaffold for the **StellarX PH workshop @ PUP QC**. It gives you a
+A ready-to-run scaffold for a **StellarX workshop**. It gives you a
 working Stellar app on **testnet** so you can spend the workshop bending it toward
 your own idea instead of fighting setup.
 
@@ -21,8 +21,6 @@ It covers **both** workshop tracks:
 ```
 
 ## Prerequisites
-
-From the [workshop setup checklist](https://stellar-pup-qc-may-2026-checklist.vercel.app/):
 
 - **Node.js 20+** and **npm** — for the frontend.
 - **Freighter** browser extension — create a wallet, switch it to **Test Net**.

@@ -1,6 +1,6 @@
 # StellarX Workshop Starter — project notes for AI tools
 
-A monorepo scaffold for the StellarX PH workshop @ PUP QC. Two parts:
+A monorepo scaffold for a StellarX workshop. Two parts:
 
 - `web/` — Next.js 16 + TypeScript + Tailwind v4 frontend (connect Freighter,
   show balances, send a testnet payment, invoke a Soroban contract).

@@ -66,7 +66,7 @@ export default function Home() {
         <SavingsGoal publicKey={publicKey} />
 
         <footer className="mt-10 text-center text-xs text-gray-400">
-          Built for the StellarX PH workshop @ PUP QC · pick an idea, then bend
+          Built for the StellarX workshop · pick an idea, then bend
           this scaffold toward it.
         </footer>
       </div>
