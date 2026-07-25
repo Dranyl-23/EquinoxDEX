@@ -8,6 +8,9 @@ pub struct Position {
     pub leverage: u32,        
     pub entry_price: i128,    
     pub is_long: bool,        
+    pub take_profit: i128,          // 0 means not set
+    pub stop_loss: i128,            // 0 means not set
+    pub funding_index_at_entry: i128, // Snapshotted at entry
 }
 
 #[contracttype]
@@ -15,10 +18,11 @@ pub enum DataKey {
     Admin,
     UsdcToken,
     OracleAddress,
-    Position(Address), // User -> Position
+    Position(Address),
     TotalShares,
     TotalPoolUsdc,
-    LpBalance(Address), // User -> LP Shares
+    LpBalance(Address),
+    GlobalFundingRate, // Simplistic representation for workshop demo
 }
 
 #[contracterror]
@@ -33,6 +37,7 @@ pub enum Error {
     InvalidMargin = 6,
     InsufficientLiquidity = 7,
     InsufficientShares = 8,
+    OrderNotTriggered = 9,
 }
 
 #[contract]
@@ -50,10 +55,25 @@ impl SmartMarginContract {
         
         env.storage().instance().set(&DataKey::TotalShares, &0i128);
         env.storage().instance().set(&DataKey::TotalPoolUsdc, &0i128);
+        env.storage().instance().set(&DataKey::GlobalFundingRate, &0i128);
         Ok(())
     }
 
-    /// Add liquidity to the GLP-style pool
+    /// Admin can manually adjust the mock funding rate for demo purposes
+    pub fn set_funding_rate(env: Env, admin: Address, rate: i128) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage().instance().set(&DataKey::GlobalFundingRate, &rate);
+        Ok(())
+    }
+
+    pub fn get_funding_rate(env: Env) -> i128 {
+        env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0)
+    }
+
     pub fn add_liquidity(env: Env, lp: Address, amount: i128) -> Result<i128, Error> {
         lp.require_auth();
         if amount <= 0 {
@@ -86,7 +106,6 @@ impl SmartMarginContract {
         Ok(shares_to_mint)
     }
 
-    /// Remove liquidity from the pool
     pub fn remove_liquidity(env: Env, lp: Address, shares: i128) -> Result<i128, Error> {
         lp.require_auth();
         if shares <= 0 {
@@ -127,11 +146,12 @@ impl SmartMarginContract {
         )
     }
 
-    pub fn open_position(env: Env, user: Address, margin: i128, leverage: u32, is_long: bool) -> Result<(), Error> {
+    pub fn open_position(env: Env, user: Address, margin: i128, leverage: u32, is_long: bool, take_profit: i128, stop_loss: i128) -> Result<(), Error> {
         user.require_auth();
         
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
         let entry_price = Self::fetch_price(&env);
+        let current_funding = Self::get_funding_rate(env.clone());
         
         if margin <= 0 || leverage < 1 {
             return Err(Error::InvalidMargin);
@@ -149,6 +169,9 @@ impl SmartMarginContract {
             leverage,
             entry_price,
             is_long,
+            take_profit,
+            stop_loss,
+            funding_index_at_entry: current_funding,
         };
 
         env.storage().persistent().set(&DataKey::Position(user), &position);
@@ -158,18 +181,28 @@ impl SmartMarginContract {
     pub fn close_position(env: Env, user: Address) -> Result<i128, Error> {
         let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
         let current_price = Self::fetch_price(&env);
+        let current_funding = Self::get_funding_rate(env.clone());
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
         
+        // PnL from Price Action
         let price_diff = if position.is_long {
             current_price - position.entry_price
         } else {
             position.entry_price - current_price
         };
-        
         let pnl = (price_diff * position.margin * (position.leverage as i128)) / position.entry_price;
         
-        let mut payout = position.margin + pnl;
-        let mut final_pnl = pnl;
+        // PnL from Funding Rates (Simple logic for demo: Longs pay shorts when positive)
+        let funding_diff = current_funding - position.funding_index_at_entry;
+        let funding_pnl = if position.is_long {
+            -funding_diff // Longs lose money when rate goes up
+        } else {
+            funding_diff  // Shorts make money when rate goes up
+        };
+
+        // Total Payout
+        let mut final_pnl = pnl + funding_pnl;
+        let mut payout = position.margin + final_pnl;
 
         if payout < 0 {
             // Liquidated. Payout is 0, user loses entire margin.
@@ -177,16 +210,10 @@ impl SmartMarginContract {
             final_pnl = -position.margin;
         }
 
-        // The LP pool is the counterparty.
-        // If user made profit (pnl > 0), pool loses that much.
-        // If user lost money (pnl < 0), pool gains that much.
         let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
         total_usdc -= final_pnl; 
         
         if total_usdc < 0 {
-            // Extreme edge case: Protocol insolvency. The pool cannot cover the payout.
-            // For MVP, we'll cap the payout to whatever the pool has left.
-            // Payout = Margin + Pool's remaining balance
             payout = position.margin + (total_usdc + final_pnl); 
             total_usdc = 0;
         }
@@ -200,6 +227,28 @@ impl SmartMarginContract {
         }
 
         Ok(payout)
+    }
+
+    /// Keepers call this to automatically trigger a user's Stop Loss or Take Profit
+    pub fn trigger_orders(env: Env, user: Address) -> Result<i128, Error> {
+        let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
+        let current_price = Self::fetch_price(&env);
+        
+        let mut should_trigger = false;
+        
+        if position.is_long {
+            if position.take_profit > 0 && current_price >= position.take_profit { should_trigger = true; }
+            if position.stop_loss > 0 && current_price <= position.stop_loss { should_trigger = true; }
+        } else {
+            if position.take_profit > 0 && current_price <= position.take_profit { should_trigger = true; }
+            if position.stop_loss > 0 && current_price >= position.stop_loss { should_trigger = true; }
+        }
+
+        if should_trigger {
+            return Self::close_position(env, user);
+        }
+        
+        Err(Error::OrderNotTriggered)
     }
 
     pub fn get_position(env: Env, user: Address) -> Result<Position, Error> {

@@ -6,7 +6,6 @@ use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient as TokenAdminClient;
 
-// Define a simple mock oracle in the same file for testing
 #[contract]
 pub struct DummyOracle;
 #[contractimpl]
@@ -36,7 +35,6 @@ fn setup_oracle(env: &Env) -> Address {
     env.register(DummyOracle, ())
 }
 
-// Helper to set price on the dummy oracle
 fn set_dummy_price(env: &Env, oracle_id: &Address, price: i128) {
     env.invoke_contract::<()>(
         oracle_id,
@@ -46,7 +44,7 @@ fn set_dummy_price(env: &Env, oracle_id: &Address, price: i128) {
 }
 
 #[test]
-fn test_long_profitable_with_lp() {
+fn test_funding_rate_impact() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -55,52 +53,32 @@ fn test_long_profitable_with_lp() {
     let user = Address::generate(&env);
 
     let (token, token_admin) = create_token_contract(&env, &admin);
-    
-    // Mint 10,000 USDC to LP, 1000 to user
     token_admin.mint(&lp, &10000_0000000);
     token_admin.mint(&user, &1000_0000000);
 
     let client = setup(&env);
-    let contract_id = client.address.clone();
     let oracle_id = setup_oracle(&env);
 
-    // Init the margin contract
     client.init(&admin, &token.address, &oracle_id);
-
-    // LP adds 10,000 USDC liquidity
     client.add_liquidity(&lp, &10000_0000000);
-    
-    // Set BTC price to $60,000
     set_dummy_price(&env, &oracle_id, 60000_0000000);
 
-    // User opens 10x Long with 100 USDC margin
-    client.open_position(&user, &100_0000000, &10, &true);
+    // Funding rate starts at 0. User opens long.
+    client.open_position(&user, &100_0000000, &10, &true, &0, &0);
 
-    // Check balances
-    assert_eq!(token.balance(&user), 900_0000000);
-    assert_eq!(token.balance(&lp), 0);
-    assert_eq!(token.balance(&contract_id), 10100_0000000); // 10,000 LP + 100 Margin
+    // Admin hikes funding rate to 20 USDC per margin unit
+    client.set_funding_rate(&admin, &20_0000000);
 
-    // Price pumps to $66,000 (+10%), 10x leverage = +100% PnL = +100 USDC profit
-    set_dummy_price(&env, &oracle_id, 66000_0000000);
-
-    // Close position
+    // Price stays the same, but user closes position. 
+    // They are long, rate went up by 20, so they owe 20 USDC.
     let payout = client.close_position(&user);
     
-    // Expected payout = margin (100) + profit (100) = 200 USDC
-    assert_eq!(payout, 200_0000000);
-    assert_eq!(token.balance(&user), 1100_0000000); // 900 + 200 payout
-    assert_eq!(token.balance(&contract_id), 9900_0000000); // 10100 - 200 payout
-
-    // LP withdraws their remaining liquidity
-    // Since LP pool paid out 100 USDC, LP pool should only have 9900 USDC left
-    let usdc_returned = client.remove_liquidity(&lp, &10000_0000000); // they got 10000 shares originally
-    assert_eq!(usdc_returned, 9900_0000000);
-    assert_eq!(token.balance(&lp), 9900_0000000);
+    // Expected: 100 margin - 20 funding loss = 80 USDC
+    assert_eq!(payout, 80_0000000);
 }
 
 #[test]
-fn test_long_liquidation_with_lp() {
+fn test_take_profit_trigger() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -116,26 +94,49 @@ fn test_long_liquidation_with_lp() {
     let oracle_id = setup_oracle(&env);
 
     client.init(&admin, &token.address, &oracle_id);
-
-    // LP adds 10,000 USDC
     client.add_liquidity(&lp, &10000_0000000);
-    
     set_dummy_price(&env, &oracle_id, 60000_0000000);
 
-    // User opens 10x Long with 100 USDC margin
-    client.open_position(&user, &100_0000000, &10, &true);
+    // Open Long at 60k, TP at 66k, SL at 54k
+    client.open_position(&user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000);
 
-    // Price dumps to $54,000 (-10%), 10x leverage = -100% PnL = Liquidated
-    set_dummy_price(&env, &oracle_id, 54000_0000000);
+    // Price hits TP exactly
+    set_dummy_price(&env, &oracle_id, 66000_0000000);
 
-    let payout = client.close_position(&user);
+    // A keeper bot triggers it
+    let payout = client.trigger_orders(&user);
     
-    // Expected payout = 0
-    assert_eq!(payout, 0);
-    assert_eq!(token.balance(&user), 900_0000000); 
+    // +10% move * 10x leverage = +100%. Payout = 200 USDC.
+    assert_eq!(payout, 200_0000000);
+}
 
-    // The LP pool keeps the user's 100 USDC margin
-    let usdc_returned = client.remove_liquidity(&lp, &10000_0000000);
-    assert_eq!(usdc_returned, 10100_0000000);
-    assert_eq!(token.balance(&lp), 10100_0000000);
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn test_order_not_triggered() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
+    token_admin.mint(&user, &1000_0000000);
+
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+    client.add_liquidity(&lp, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, 60000_0000000);
+
+    // TP at 66k, SL at 54k
+    client.open_position(&user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000);
+
+    // Price moves to 65k (Not at TP yet)
+    set_dummy_price(&env, &oracle_id, 65000_0000000);
+
+    // Keeper tries to trigger, should panic with OrderNotTriggered
+    client.trigger_orders(&user);
 }

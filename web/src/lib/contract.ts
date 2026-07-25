@@ -20,10 +20,34 @@ export interface Position {
   leverage: number;
   entry_price: number;
   is_long: boolean;
+  take_profit: number;
+  stop_loss: number;
+  funding_index_at_entry: number;
 }
 
 export function contractConfigured(): boolean {
   return Boolean(CONTRACT_ID);
+}
+
+/** Read global funding rate via simulation */
+export async function readGlobalFundingRate(): Promise<number> {
+  const contract = new Contract(CONTRACT_ID);
+  const source = new Account(READ_SOURCE, '0');
+
+  const tx = new TransactionBuilder(source, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call('get_funding_rate'))
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    return 0;
+  }
+  
+  return Number(scValToNative(sim.result.retval));
 }
 
 /** Read position via simulation — no wallet or signature required. */
@@ -43,7 +67,6 @@ export async function readPosition(userAddress: string): Promise<Position | null
 
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
-    // Fails if position doesn't exist (returns NoPosition error)
     return null;
   }
 
@@ -52,6 +75,9 @@ export async function readPosition(userAddress: string): Promise<Position | null
     leverage: number;
     entry_price: bigint;
     is_long: boolean;
+    take_profit: bigint;
+    stop_loss: bigint;
+    funding_index_at_entry: bigint;
   };
   
   return {
@@ -59,6 +85,9 @@ export async function readPosition(userAddress: string): Promise<Position | null
     leverage: pos.leverage,
     entry_price: Number(pos.entry_price),
     is_long: pos.is_long,
+    take_profit: Number(pos.take_profit),
+    stop_loss: Number(pos.stop_loss),
+    funding_index_at_entry: Number(pos.funding_index_at_entry),
   };
 }
 
@@ -69,7 +98,9 @@ export async function buildOpenPositionXDR(
   sender: string,
   margin: number, // Already scaled by 10^7
   leverage: number,
-  isLong: boolean
+  isLong: boolean,
+  takeProfit: number, // Scaled by 10^7
+  stopLoss: number    // Scaled by 10^7
 ): Promise<string> {
   const contract = new Contract(CONTRACT_ID);
   const account = await server.getAccount(sender);
@@ -84,7 +115,9 @@ export async function buildOpenPositionXDR(
         new Address(sender).toScVal(),
         nativeToScVal(BigInt(Math.trunc(margin)), { type: 'i128' }),
         nativeToScVal(leverage, { type: 'u32' }),
-        nativeToScVal(isLong, { type: 'bool' })
+        nativeToScVal(isLong, { type: 'bool' }),
+        nativeToScVal(BigInt(Math.trunc(takeProfit)), { type: 'i128' }),
+        nativeToScVal(BigInt(Math.trunc(stopLoss)), { type: 'i128' })
       )
     )
     .setTimeout(30)
@@ -119,6 +152,31 @@ export async function buildClosePositionXDR(sender: string): Promise<string> {
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     throw new Error('Simulation failed to close position.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/**
+ * Keeper function: trigger orders
+ */
+export async function buildTriggerOrdersXDR(sender: string, targetUser: string): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(sender);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call('trigger_orders', new Address(targetUser).toScVal())
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Trigger orders simulation failed - TP/SL likely not hit yet.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();
