@@ -11,7 +11,7 @@ param([string]$Identity = "workshop")
 $ErrorActionPreference = "Stop"
 $Network = "testnet"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$Wasm = "target\wasm32v1-none\release\savings_goal.wasm"
+$Wasm = "target\wasm32v1-none\release\smart_margin.wasm"
 $EnvFile = Join-Path $Root "web\.env.local"
 
 Set-Location $Root
@@ -32,13 +32,7 @@ Write-Host "Deploying to $Network..."
 $ContractId = (stellar contract deploy --wasm $Wasm --source-account $Identity --network $Network).Trim()
 Write-Host "Deployed contract ID: $ContractId"
 
-# 4. Initialise the savings goal (target = 1000). Ignore error if already initialised.
-Write-Host "Initialising savings goal (target 1000)..."
-try {
-  stellar contract invoke --id $ContractId --source-account $Identity --network $Network -- init --target 1000
-} catch {
-  Write-Host "(init skipped — contract may already be initialised)"
-}
+# 4. (SmartMargin initialization will go here)
 
 # 5. Write NEXT_PUBLIC_CONTRACT_ID into web\.env.local
 if (Test-Path $EnvFile) {

@@ -11,7 +11,7 @@ set -euo pipefail
 IDENTITY="${1:-workshop}"
 NETWORK="testnet"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WASM="target/wasm32v1-none/release/savings_goal.wasm"
+WASM="target/wasm32v1-none/release/smart_margin.wasm"
 ENV_FILE="$ROOT/web/.env.local"
 
 cd "$ROOT"
@@ -34,13 +34,7 @@ CONTRACT_ID=$(stellar contract deploy \
   --network "$NETWORK")
 echo "Deployed contract ID: $CONTRACT_ID"
 
-# 4. Initialise the savings goal (target = 1000). Ignore error if already initialised.
-echo "Initialising savings goal (target 1000)..."
-stellar contract invoke \
-  --id "$CONTRACT_ID" \
-  --source-account "$IDENTITY" \
-  --network "$NETWORK" \
-  -- init --target 1000 || echo "(init skipped — contract may already be initialised)"
+# 4. (SmartMargin initialization will go here)
 
 # 5. Write NEXT_PUBLIC_CONTRACT_ID into web/.env.local
 if [ -f "$ENV_FILE" ]; then
