@@ -43,7 +43,7 @@ export default function ConnectWallet({
       <button
         onClick={connect}
         disabled={connecting}
-        className="rounded bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded bg-brand px-4 py-2 text-white font-bold transition-colors hover:bg-brand-hover disabled:opacity-50 text-sm"
       >
         {connecting ? 'Connecting…' : 'Connect Freighter'}
       </button>

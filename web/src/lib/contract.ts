@@ -6,6 +6,7 @@ import {
   rpc,
   nativeToScVal,
   scValToNative,
+  Address,
 } from '@stellar/stellar-sdk';
 import { server, NETWORK_PASSPHRASE, CONTRACT_ID } from './stellar';
 
@@ -14,17 +15,19 @@ import { server, NETWORK_PASSPHRASE, CONTRACT_ID } from './stellar';
 // account works — we reuse the Circle USDC issuer.
 const READ_SOURCE = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
-export interface SavingsState {
-  saved: number;
-  target: number;
+export interface Position {
+  margin: number;
+  leverage: number;
+  entry_price: number;
+  is_long: boolean;
 }
 
 export function contractConfigured(): boolean {
   return Boolean(CONTRACT_ID);
 }
 
-/** Read get_state() via simulation — no wallet or signature required. */
-export async function readSavingsState(): Promise<SavingsState> {
+/** Read position via simulation — no wallet or signature required. */
+export async function readPosition(userAddress: string): Promise<Position | null> {
   const contract = new Contract(CONTRACT_ID);
   const source = new Account(READ_SOURCE, '0');
 
@@ -32,30 +35,41 @@ export async function readSavingsState(): Promise<SavingsState> {
     fee: BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
   })
-    .addOperation(contract.call('get_state'))
+    .addOperation(
+      contract.call('get_position', new Address(userAddress).toScVal())
+    )
     .setTimeout(30)
     .build();
 
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
-    throw new Error('Could not read contract state. Is it deployed and initialised?');
+    // Fails if position doesn't exist (returns NoPosition error)
+    return null;
   }
 
-  const state = scValToNative(sim.result.retval) as {
-    saved: bigint;
-    target: bigint;
+  const pos = scValToNative(sim.result.retval) as {
+    margin: bigint;
+    leverage: number;
+    entry_price: bigint;
+    is_long: boolean;
   };
-  return { saved: Number(state.saved), target: Number(state.target) };
+  
+  return {
+    margin: Number(pos.margin),
+    leverage: pos.leverage,
+    entry_price: Number(pos.entry_price),
+    is_long: pos.is_long,
+  };
 }
 
 /**
- * Build + simulate + assemble an unsigned `contribute(amount)` invocation,
- * returning the prepared XDR ready for Freighter to sign.
- * Honors the rule: always simulate a Soroban tx before sending.
+ * Build + simulate + assemble an unsigned `open_position` invocation.
  */
-export async function buildContributeXDR(
+export async function buildOpenPositionXDR(
   sender: string,
-  amount: number,
+  margin: number, // Already scaled by 10^7
+  leverage: number,
+  isLong: boolean
 ): Promise<string> {
   const contract = new Contract(CONTRACT_ID);
   const account = await server.getAccount(sender);
@@ -66,16 +80,45 @@ export async function buildContributeXDR(
   })
     .addOperation(
       contract.call(
-        'contribute',
-        nativeToScVal(BigInt(Math.trunc(amount)), { type: 'i128' }),
-      ),
+        'open_position',
+        new Address(sender).toScVal(),
+        nativeToScVal(BigInt(Math.trunc(margin)), { type: 'i128' }),
+        nativeToScVal(leverage, { type: 'u32' }),
+        nativeToScVal(isLong, { type: 'bool' })
+      )
     )
     .setTimeout(30)
     .build();
 
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
-    throw new Error('Simulation failed — the contribute call would not succeed.');
+    console.error('Simulation failed', sim.error, sim.events);
+    throw new Error('Simulation failed — Check testnet balance or if position exists.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/**
+ * Build + simulate + assemble an unsigned `close_position` invocation.
+ */
+export async function buildClosePositionXDR(sender: string): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(sender);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call('close_position', new Address(sender).toScVal())
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed to close position.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();

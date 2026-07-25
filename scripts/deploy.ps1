@@ -32,7 +32,17 @@ Write-Host "Deploying to $Network..."
 $ContractId = (stellar contract deploy --wasm $Wasm --source-account $Identity --network $Network).Trim()
 Write-Host "Deployed contract ID: $ContractId"
 
-# 4. (SmartMargin initialization will go here)
+# 4. Initialize the SmartMargin contract
+Write-Host "Initialising SmartMargin..."
+$AdminAddr = (stellar keys address $Identity).Trim()
+$NativeToken = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+$InitialPrice = "600000000000"
+
+try {
+  stellar contract invoke --id $ContractId --source-account $Identity --network $Network -- init --admin $AdminAddr --usdc_token $NativeToken --initial_price $InitialPrice
+} catch {
+  Write-Host "(init skipped - contract may already be initialised)"
+}
 
 # 5. Write NEXT_PUBLIC_CONTRACT_ID into web\.env.local
 if (Test-Path $EnvFile) {

@@ -17,6 +17,7 @@ export interface WalletState {
   error: string | null;
   connect: () => void;
   disconnect: () => void;
+  signTransaction: (xdr: string, network?: string) => Promise<string>;
 }
 
 export function useWallet(): WalletState {
@@ -60,5 +61,12 @@ export function useWallet(): WalletState {
     setError(null);
   }, []);
 
-  return { publicKey, connecting, error, connect, disconnect };
+  const signTransaction = useCallback(async (xdr: string, network?: string) => {
+    const freighter = await import('@stellar/freighter-api');
+    const result = await freighter.signTransaction(xdr, { network: network || 'TESTNET' });
+    if (result.error) throw new Error(result.error);
+    return result.signedTx;
+  }, []);
+
+  return { publicKey, connecting, error, connect, disconnect, signTransaction };
 }
