@@ -34,7 +34,7 @@ export default function Home() {
       }
     };
     load();
-    const interval = setInterval(load, 3000);
+    const interval = setInterval(load, 1000); // 1-second polling for ultra-fast UX
     return () => clearInterval(interval);
   }, [publicKey]);
 
