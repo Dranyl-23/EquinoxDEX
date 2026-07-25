@@ -1,59 +1,100 @@
 #![cfg(test)]
+extern crate std;
+
 use super::*;
-use soroban_sdk::Env;
+use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::token;
+use soroban_sdk::token::Client as TokenClient;
+use soroban_sdk::token::StellarAssetClient as TokenAdminClient;
 
-fn setup(env: &Env) -> SavingsGoalContractClient {
-    let contract_id = env.register(SavingsGoalContract, ());
-    SavingsGoalContractClient::new(env, &contract_id)
+fn create_token_contract<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, TokenAdminClient<'a>) {
+    let contract_address = env.register_stellar_asset_contract(admin.clone());
+    (
+        TokenClient::new(env, &contract_address),
+        TokenAdminClient::new(env, &contract_address),
+    )
+}
+
+fn setup(env: &Env) -> SmartMarginContractClient {
+    let contract_id = env.register(SmartMarginContract, ());
+    SmartMarginContractClient::new(env, &contract_id)
 }
 
 #[test]
-fn init_then_contribute_tracks_total() {
+fn test_long_profitable() {
     let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    
+    // Mint 1000 USDC to user
+    token_admin.mint(&user, &1000_0000000);
+
     let client = setup(&env);
+    let contract_id = client.address.clone();
 
-    client.init(&1000);
-    let state = client.get_state();
-    assert_eq!(state.target, 1000);
-    assert_eq!(state.saved, 0);
+    // Mint liquidity to the contract so it can pay out winning trades
+    token_admin.mint(&contract_id, &10000_0000000);
 
-    assert_eq!(client.contribute(&250), 250);
-    assert_eq!(client.contribute(&750), 1000);
+    // Init with BTC price at $60,000 (scaled by 10^7, so 600,000,000,000)
+    let btc_price: i128 = 60000_0000000;
+    client.init(&admin, &token.address, &btc_price);
 
-    let state = client.get_state();
-    assert_eq!(state.saved, 1000);
-    assert_eq!(state.target, 1000);
+    // User opens 10x Long with 100 USDC margin
+    let margin: i128 = 100_0000000;
+    client.open_position(&user, &margin, &10, &true);
+
+    // Check balances (user should have 900, contract 10100)
+    assert_eq!(token.balance(&user), 900_0000000);
+    assert_eq!(token.balance(&contract_id), 10100_0000000);
+
+    // Price pumps to $66,000 (+10%)
+    // 10x leverage = +100% PnL (profit = 100 USDC)
+    client.set_price(&admin, &66000_0000000);
+
+    // Close position
+    let payout = client.close_position(&user);
+    
+    // Expected payout = margin (100) + profit (100) = 200 USDC
+    assert_eq!(payout, 200_0000000);
+    assert_eq!(token.balance(&user), 1100_0000000); // 900 + 200
+    assert_eq!(token.balance(&contract_id), 9900_0000000); // 10100 - 200
 }
 
 #[test]
-fn get_state_before_init_is_zero() {
+fn test_long_liquidation() {
     let env = Env::default();
-    let client = setup(&env);
-    let state = client.get_state();
-    assert_eq!(state.saved, 0);
-    assert_eq!(state.target, 0);
-}
+    env.mock_all_auths();
 
-#[test]
-fn double_init_fails() {
-    let env = Env::default();
-    let client = setup(&env);
-    client.init(&1000);
-    assert_eq!(client.try_init(&500), Err(Ok(Error::AlreadyInitialized)));
-}
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
 
-#[test]
-fn contribute_before_init_fails() {
-    let env = Env::default();
-    let client = setup(&env);
-    assert_eq!(client.try_contribute(&100), Err(Ok(Error::NotInitialized)));
-}
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&user, &1000_0000000);
 
-#[test]
-fn rejects_non_positive_amounts() {
-    let env = Env::default();
     let client = setup(&env);
-    client.init(&1000);
-    assert_eq!(client.try_contribute(&0), Err(Ok(Error::InvalidAmount)));
-    assert_eq!(client.try_contribute(&-5), Err(Ok(Error::InvalidAmount)));
+    let contract_id = client.address.clone();
+
+    token_admin.mint(&contract_id, &10000_0000000);
+
+    let btc_price: i128 = 60000_0000000;
+    client.init(&admin, &token.address, &btc_price);
+
+    let margin: i128 = 100_0000000;
+    client.open_position(&user, &margin, &10, &true);
+
+    // Price dumps to $54,000 (-10%)
+    // 10x leverage = -100% PnL (profit = -100 USDC) -> Liquidated
+    client.set_price(&admin, &54000_0000000);
+
+    let payout = client.close_position(&user);
+    
+    // Expected payout = 0
+    assert_eq!(payout, 0);
+    assert_eq!(token.balance(&user), 900_0000000); 
+    // The contract keeps the 100 USDC
+    assert_eq!(token.balance(&contract_id), 10100_0000000);
 }
