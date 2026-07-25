@@ -1,21 +1,24 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, Address, Env};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, vec, Address, Env, Symbol, IntoVal};
 
 #[contracttype]
 #[derive(Clone)]
 pub struct Position {
-    pub margin: i128,         // USDC deposited as collateral
-    pub leverage: u32,        // e.g., 10x
-    pub entry_price: i128,    // BTC price when opened
-    pub is_long: bool,        // true = Long, false = Short
+    pub margin: i128,         
+    pub leverage: u32,        
+    pub entry_price: i128,    
+    pub is_long: bool,        
 }
 
 #[contracttype]
 pub enum DataKey {
     Admin,
     UsdcToken,
-    MockPrice,
-    Position(Address), // User's Address -> Position
+    OracleAddress,
+    Position(Address), // User -> Position
+    TotalShares,
+    TotalPoolUsdc,
+    LpBalance(Address), // User -> LP Shares
 }
 
 #[contracterror]
@@ -28,6 +31,8 @@ pub enum Error {
     NoPosition = 4,
     PositionAlreadyExists = 5,
     InvalidMargin = 6,
+    InsufficientLiquidity = 7,
+    InsufficientShares = 8,
 }
 
 #[contract]
@@ -35,38 +40,98 @@ pub struct SmartMarginContract;
 
 #[contractimpl]
 impl SmartMarginContract {
-    /// Initialize the contract with the Admin address, USDC token address, and starting BTC price.
-    pub fn init(env: Env, admin: Address, usdc_token: Address, initial_price: i128) -> Result<(), Error> {
+    pub fn init(env: Env, admin: Address, usdc_token: Address, oracle_address: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::UsdcToken, &usdc_token);
-        env.storage().instance().set(&DataKey::MockPrice, &initial_price);
+        env.storage().instance().set(&DataKey::OracleAddress, &oracle_address);
+        
+        env.storage().instance().set(&DataKey::TotalShares, &0i128);
+        env.storage().instance().set(&DataKey::TotalPoolUsdc, &0i128);
         Ok(())
     }
 
-    /// Admin can update the current mock price of BTC.
-    pub fn set_price(env: Env, admin: Address, new_price: i128) -> Result<(), Error> {
-        admin.require_auth();
-        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
-        if admin != stored_admin {
-            return Err(Error::Unauthorized);
+    /// Add liquidity to the GLP-style pool
+    pub fn add_liquidity(env: Env, lp: Address, amount: i128) -> Result<i128, Error> {
+        lp.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidMargin);
         }
-        env.storage().instance().set(&DataKey::MockPrice, &new_price);
-        Ok(())
+
+        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&lp, &env.current_contract_address(), &amount);
+
+        let mut total_shares: i128 = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
+        let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+
+        let shares_to_mint = if total_shares == 0 || total_usdc == 0 {
+            amount
+        } else {
+            (amount * total_shares) / total_usdc
+        };
+
+        total_shares += shares_to_mint;
+        total_usdc += amount;
+
+        env.storage().instance().set(&DataKey::TotalShares, &total_shares);
+        env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
+
+        let mut lp_bal: i128 = env.storage().persistent().get(&DataKey::LpBalance(lp.clone())).unwrap_or(0);
+        lp_bal += shares_to_mint;
+        env.storage().persistent().set(&DataKey::LpBalance(lp), &lp_bal);
+
+        Ok(shares_to_mint)
     }
 
-    pub fn get_price(env: Env) -> Result<i128, Error> {
-        env.storage().instance().get(&DataKey::MockPrice).ok_or(Error::NotInitialized)
+    /// Remove liquidity from the pool
+    pub fn remove_liquidity(env: Env, lp: Address, shares: i128) -> Result<i128, Error> {
+        lp.require_auth();
+        if shares <= 0 {
+            return Err(Error::InvalidMargin);
+        }
+
+        let mut lp_bal: i128 = env.storage().persistent().get(&DataKey::LpBalance(lp.clone())).unwrap_or(0);
+        if lp_bal < shares {
+            return Err(Error::InsufficientShares);
+        }
+
+        let mut total_shares: i128 = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
+        let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+
+        let usdc_to_return = (shares * total_usdc) / total_shares;
+
+        total_shares -= shares;
+        total_usdc -= usdc_to_return;
+        lp_bal -= shares;
+
+        env.storage().instance().set(&DataKey::TotalShares, &total_shares);
+        env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
+        env.storage().persistent().set(&DataKey::LpBalance(lp.clone()), &lp_bal);
+
+        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &lp, &usdc_to_return);
+
+        Ok(usdc_to_return)
     }
 
-    /// Open a new leveraged position
+    fn fetch_price(env: &Env) -> i128 {
+        let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        env.invoke_contract(
+            &oracle_addr,
+            &Symbol::new(env, "get_price"),
+            vec![env, Symbol::new(env, "BTC").into_val(env)]
+        )
+    }
+
     pub fn open_position(env: Env, user: Address, margin: i128, leverage: u32, is_long: bool) -> Result<(), Error> {
         user.require_auth();
         
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
-        let entry_price: i128 = env.storage().instance().get(&DataKey::MockPrice).ok_or(Error::NotInitialized)?;
+        let entry_price = Self::fetch_price(&env);
         
         if margin <= 0 || leverage < 1 {
             return Err(Error::InvalidMargin);
@@ -76,7 +141,6 @@ impl SmartMarginContract {
             return Err(Error::PositionAlreadyExists);
         }
 
-        // Transfer USDC from user to contract (acts as the Margin Vault)
         let token_client = token::Client::new(&env, &token_addr);
         token_client.transfer(&user, &env.current_contract_address(), &margin);
 
@@ -88,40 +152,48 @@ impl SmartMarginContract {
         };
 
         env.storage().persistent().set(&DataKey::Position(user), &position);
-        
         Ok(())
     }
 
-    /// Close an open position and calculate PnL. 
     pub fn close_position(env: Env, user: Address) -> Result<i128, Error> {
-        // In a real app, only the user could close it unless bankrupt. 
-        // For the workshop, we allow anyone to trigger it so we can easily demo liquidations.
-        
         let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
-        let current_price: i128 = env.storage().instance().get(&DataKey::MockPrice).ok_or(Error::NotInitialized)?;
+        let current_price = Self::fetch_price(&env);
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
         
-        // PnL calculation: price difference = current - entry (if long) or entry - current (if short)
         let price_diff = if position.is_long {
             current_price - position.entry_price
         } else {
             position.entry_price - current_price
         };
         
-        // pnl = (price_diff * margin * leverage) / entry_price
         let pnl = (price_diff * position.margin * (position.leverage as i128)) / position.entry_price;
         
         let mut payout = position.margin + pnl;
-        
-        // If payout is less than 0, user is liquidated and gets nothing.
+        let mut final_pnl = pnl;
+
         if payout < 0 {
+            // Liquidated. Payout is 0, user loses entire margin.
             payout = 0;
+            final_pnl = -position.margin;
         }
 
-        // Remove position from storage
+        // The LP pool is the counterparty.
+        // If user made profit (pnl > 0), pool loses that much.
+        // If user lost money (pnl < 0), pool gains that much.
+        let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        total_usdc -= final_pnl; 
+        
+        if total_usdc < 0 {
+            // Extreme edge case: Protocol insolvency. The pool cannot cover the payout.
+            // For MVP, we'll cap the payout to whatever the pool has left.
+            // Payout = Margin + Pool's remaining balance
+            payout = position.margin + (total_usdc + final_pnl); 
+            total_usdc = 0;
+        }
+
+        env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
         env.storage().persistent().remove(&DataKey::Position(user.clone()));
 
-        // Return the payout to the user if they didn't get liquidated
         if payout > 0 {
             let token_client = token::Client::new(&env, &token_addr);
             token_client.transfer(&env.current_contract_address(), &user, &payout);

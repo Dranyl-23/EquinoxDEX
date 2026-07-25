@@ -2,10 +2,22 @@
 extern crate std;
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env};
-
+use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient as TokenAdminClient;
+
+// Define a simple mock oracle in the same file for testing
+#[contract]
+pub struct DummyOracle;
+#[contractimpl]
+impl DummyOracle {
+    pub fn get_price(env: Env, _symbol: Symbol) -> i128 {
+        env.storage().instance().get(&Symbol::new(&env, "mock_price")).unwrap_or(0)
+    }
+    pub fn set_price(env: Env, price: i128) {
+        env.storage().instance().set(&Symbol::new(&env, "mock_price"), &price);
+    }
+}
 
 fn create_token_contract<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, TokenAdminClient<'a>) {
     let contract_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
@@ -20,81 +32,110 @@ fn setup(env: &Env) -> SmartMarginContractClient<'_> {
     SmartMarginContractClient::new(env, &contract_id)
 }
 
+fn setup_oracle(env: &Env) -> Address {
+    env.register(DummyOracle, ())
+}
+
+// Helper to set price on the dummy oracle
+fn set_dummy_price(env: &Env, oracle_id: &Address, price: i128) {
+    env.invoke_contract::<()>(
+        oracle_id,
+        &Symbol::new(env, "set_price"),
+        vec![env, price.into_val(env)]
+    );
+}
+
 #[test]
-fn test_long_profitable() {
+fn test_long_profitable_with_lp() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
     let user = Address::generate(&env);
 
     let (token, token_admin) = create_token_contract(&env, &admin);
     
-    // Mint 1000 USDC to user
+    // Mint 10,000 USDC to LP, 1000 to user
+    token_admin.mint(&lp, &10000_0000000);
     token_admin.mint(&user, &1000_0000000);
 
     let client = setup(&env);
     let contract_id = client.address.clone();
+    let oracle_id = setup_oracle(&env);
 
-    // Mint liquidity to the contract so it can pay out winning trades
-    token_admin.mint(&contract_id, &10000_0000000);
+    // Init the margin contract
+    client.init(&admin, &token.address, &oracle_id);
 
-    // Init with BTC price at $60,000 (scaled by 10^7, so 600,000,000,000)
-    let btc_price: i128 = 60000_0000000;
-    client.init(&admin, &token.address, &btc_price);
+    // LP adds 10,000 USDC liquidity
+    client.add_liquidity(&lp, &10000_0000000);
+    
+    // Set BTC price to $60,000
+    set_dummy_price(&env, &oracle_id, 60000_0000000);
 
     // User opens 10x Long with 100 USDC margin
-    let margin: i128 = 100_0000000;
-    client.open_position(&user, &margin, &10, &true);
+    client.open_position(&user, &100_0000000, &10, &true);
 
-    // Check balances (user should have 900, contract 10100)
+    // Check balances
     assert_eq!(token.balance(&user), 900_0000000);
-    assert_eq!(token.balance(&contract_id), 10100_0000000);
+    assert_eq!(token.balance(&lp), 0);
+    assert_eq!(token.balance(&contract_id), 10100_0000000); // 10,000 LP + 100 Margin
 
-    // Price pumps to $66,000 (+10%)
-    // 10x leverage = +100% PnL (profit = 100 USDC)
-    client.set_price(&admin, &66000_0000000);
+    // Price pumps to $66,000 (+10%), 10x leverage = +100% PnL = +100 USDC profit
+    set_dummy_price(&env, &oracle_id, 66000_0000000);
 
     // Close position
     let payout = client.close_position(&user);
     
     // Expected payout = margin (100) + profit (100) = 200 USDC
     assert_eq!(payout, 200_0000000);
-    assert_eq!(token.balance(&user), 1100_0000000); // 900 + 200
-    assert_eq!(token.balance(&contract_id), 9900_0000000); // 10100 - 200
+    assert_eq!(token.balance(&user), 1100_0000000); // 900 + 200 payout
+    assert_eq!(token.balance(&contract_id), 9900_0000000); // 10100 - 200 payout
+
+    // LP withdraws their remaining liquidity
+    // Since LP pool paid out 100 USDC, LP pool should only have 9900 USDC left
+    let usdc_returned = client.remove_liquidity(&lp, &10000_0000000); // they got 10000 shares originally
+    assert_eq!(usdc_returned, 9900_0000000);
+    assert_eq!(token.balance(&lp), 9900_0000000);
 }
 
 #[test]
-fn test_long_liquidation() {
+fn test_long_liquidation_with_lp() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
     let user = Address::generate(&env);
 
     let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
     token_admin.mint(&user, &1000_0000000);
 
     let client = setup(&env);
-    let contract_id = client.address.clone();
+    let oracle_id = setup_oracle(&env);
 
-    token_admin.mint(&contract_id, &10000_0000000);
+    client.init(&admin, &token.address, &oracle_id);
 
-    let btc_price: i128 = 60000_0000000;
-    client.init(&admin, &token.address, &btc_price);
+    // LP adds 10,000 USDC
+    client.add_liquidity(&lp, &10000_0000000);
+    
+    set_dummy_price(&env, &oracle_id, 60000_0000000);
 
-    let margin: i128 = 100_0000000;
-    client.open_position(&user, &margin, &10, &true);
+    // User opens 10x Long with 100 USDC margin
+    client.open_position(&user, &100_0000000, &10, &true);
 
-    // Price dumps to $54,000 (-10%)
-    // 10x leverage = -100% PnL (profit = -100 USDC) -> Liquidated
-    client.set_price(&admin, &54000_0000000);
+    // Price dumps to $54,000 (-10%), 10x leverage = -100% PnL = Liquidated
+    set_dummy_price(&env, &oracle_id, 54000_0000000);
 
     let payout = client.close_position(&user);
     
     // Expected payout = 0
     assert_eq!(payout, 0);
     assert_eq!(token.balance(&user), 900_0000000); 
-    // The contract keeps the 100 USDC
-    assert_eq!(token.balance(&contract_id), 10100_0000000);
+
+    // The LP pool keeps the user's 100 USDC margin
+    let usdc_returned = client.remove_liquidity(&lp, &10000_0000000);
+    assert_eq!(usdc_returned, 10100_0000000);
+    assert_eq!(token.balance(&lp), 10100_0000000);
 }
