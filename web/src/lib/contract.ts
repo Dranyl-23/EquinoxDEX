@@ -29,8 +29,8 @@ export function contractConfigured(): boolean {
   return Boolean(CONTRACT_ID);
 }
 
-/** Read global funding rate via simulation */
-export async function readGlobalFundingRate(): Promise<number> {
+/** Read global market state via simulation */
+export async function readMarketState(): Promise<{ long_oi: number; short_oi: number; global_funding: number; total_volume: number }> {
   const contract = new Contract(CONTRACT_ID);
   const source = new Account(READ_SOURCE, '0');
 
@@ -38,16 +38,22 @@ export async function readGlobalFundingRate(): Promise<number> {
     fee: BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
   })
-    .addOperation(contract.call('get_funding_rate'))
+    .addOperation(contract.call('get_market_state'))
     .setTimeout(30)
     .build();
 
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
-    return 0;
+    return { long_oi: 0, short_oi: 0, global_funding: 0, total_volume: 0 };
   }
   
-  return Number(scValToNative(sim.result.retval));
+  const res = scValToNative(sim.result.retval) as [bigint, bigint, bigint, bigint];
+  return {
+    long_oi: Number(res[0]),
+    short_oi: Number(res[1]),
+    global_funding: Number(res[2]),
+    total_volume: Number(res[3])
+  };
 }
 
 /** Read position via simulation — no wallet or signature required. */
@@ -177,6 +183,94 @@ export async function buildTriggerOrdersXDR(sender: string, targetUser: string):
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     throw new Error('Trigger orders simulation failed - TP/SL likely not hit yet.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/**
+ * Read the total pool state and the user's specific shares.
+ */
+export async function readPoolState(userAddress: string): Promise<{ totalPool: number; totalShares: number; userShares: number }> {
+  const contract = new Contract(CONTRACT_ID);
+  const source = new Account(READ_SOURCE, '0');
+
+  const tx = new TransactionBuilder(source, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call('get_pool_state', new Address(userAddress).toScVal())
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    return { totalPool: 0, totalShares: 0, userShares: 0 };
+  }
+
+  const res = scValToNative(sim.result.retval) as [bigint, bigint, bigint];
+  return {
+    totalPool: Number(res[0]),
+    totalShares: Number(res[1]),
+    userShares: Number(res[2]),
+  };
+}
+
+/**
+ * Build + simulate + assemble an unsigned `add_liquidity` invocation.
+ */
+export async function buildAddLiquidityXDR(sender: string, amountScaled: number): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(sender);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'add_liquidity',
+        new Address(sender).toScVal(),
+        nativeToScVal(BigInt(Math.trunc(amountScaled)), { type: 'i128' })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed to add liquidity.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/**
+ * Build + simulate + assemble an unsigned `remove_liquidity` invocation.
+ */
+export async function buildRemoveLiquidityXDR(sender: string, sharesScaled: number): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(sender);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'remove_liquidity',
+        new Address(sender).toScVal(),
+        nativeToScVal(BigInt(Math.trunc(sharesScaled)), { type: 'i128' })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed to remove liquidity.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();

@@ -18,7 +18,9 @@
   --color-panel: var(--panel-bg);
   --color-border: var(--border-color);
   --color-brand: var(--brand-color);
+  --color-brand-hover: var(--brand-color-hover);
   --color-danger: var(--danger-color);
+  --color-danger-hover: var(--danger-color-hover);
   --color-muted: var(--text-muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -44,4 +46,14 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
+}
+
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
 }

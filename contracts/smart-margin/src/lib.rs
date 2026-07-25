@@ -8,9 +8,9 @@ pub struct Position {
     pub leverage: u32,        
     pub entry_price: i128,    
     pub is_long: bool,        
-    pub take_profit: i128,          // 0 means not set
-    pub stop_loss: i128,            // 0 means not set
-    pub funding_index_at_entry: i128, // Snapshotted at entry
+    pub take_profit: i128,          
+    pub stop_loss: i128,            
+    pub funding_index_at_entry: i128, 
 }
 
 #[contracttype]
@@ -22,7 +22,11 @@ pub enum DataKey {
     TotalShares,
     TotalPoolUsdc,
     LpBalance(Address),
-    GlobalFundingRate, // Simplistic representation for workshop demo
+    GlobalFundingRate,
+    TotalLongOI,
+    TotalShortOI,
+    LastFundingTime,
+    TotalVolume,
 }
 
 #[contracterror]
@@ -38,6 +42,10 @@ pub enum Error {
     InsufficientLiquidity = 7,
     InsufficientShares = 8,
     OrderNotTriggered = 9,
+    ExcessiveLeverage = 10,
+    ZeroSharesMinted = 11,
+    OracleError = 12,
+    InvalidOrder = 13,
 }
 
 #[contract]
@@ -55,19 +63,54 @@ impl SmartMarginContract {
         
         env.storage().instance().set(&DataKey::TotalShares, &0i128);
         env.storage().instance().set(&DataKey::TotalPoolUsdc, &0i128);
+        
         env.storage().instance().set(&DataKey::GlobalFundingRate, &0i128);
+        env.storage().instance().set(&DataKey::TotalLongOI, &0i128);
+        env.storage().instance().set(&DataKey::TotalShortOI, &0i128);
+        env.storage().instance().set(&DataKey::LastFundingTime, &env.ledger().timestamp());
+        env.storage().instance().set(&DataKey::TotalVolume, &0i128);
         Ok(())
     }
 
-    /// Admin can manually adjust the mock funding rate for demo purposes
-    pub fn set_funding_rate(env: Env, admin: Address, rate: i128) -> Result<(), Error> {
-        admin.require_auth();
-        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
-        if admin != stored_admin {
-            return Err(Error::Unauthorized);
+    /// Dynamic Skew-Math Engine
+    /// Accumulates funding interest based on the imbalance between Longs and Shorts
+    fn update_funding(env: &Env) {
+        let current_time = env.ledger().timestamp();
+        let last_time: u64 = env.storage().instance().get(&DataKey::LastFundingTime).unwrap_or(current_time);
+        
+        if current_time > last_time {
+            let time_elapsed = (current_time - last_time) as i128;
+            let total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+            let total_short: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+            
+            // Skew is positive if Longs > Shorts. 
+            let skew = total_long - total_short;
+            
+            // Divide by 10_000 for the demo so numbers don't blow up too fast
+            let funding_for_period = (skew * time_elapsed) / 10_000;
+            
+            let mut global_funding: i128 = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
+            global_funding += funding_for_period;
+            
+            env.storage().instance().set(&DataKey::GlobalFundingRate, &global_funding);
         }
-        env.storage().instance().set(&DataKey::GlobalFundingRate, &rate);
-        Ok(())
+        
+        env.storage().instance().set(&DataKey::LastFundingTime, &current_time);
+    }
+
+    pub fn get_market_state(env: Env) -> (i128, i128, i128, i128) {
+        let long_oi = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+        let short_oi = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+        let global_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
+        let total_volume = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+        (long_oi, short_oi, global_funding, total_volume)
+    }
+
+    pub fn get_pool_state(env: Env, user: Address) -> (i128, i128, i128) {
+        let total_pool = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        let total_shares = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
+        let user_shares = env.storage().persistent().get(&DataKey::LpBalance(user)).unwrap_or(0);
+        (total_pool, total_shares, user_shares)
     }
 
     pub fn get_funding_rate(env: Env) -> i128 {
@@ -92,6 +135,11 @@ impl SmartMarginContract {
         } else {
             (amount * total_shares) / total_usdc
         };
+
+        // Protect against inflation attack: never mint 0 shares
+        if shares_to_mint <= 0 {
+            return Err(Error::ZeroSharesMinted);
+        }
 
         total_shares += shares_to_mint;
         total_usdc += amount;
@@ -121,6 +169,17 @@ impl SmartMarginContract {
         let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
 
         let usdc_to_return = (shares * total_usdc) / total_shares;
+        let payout = usdc_to_return;
+
+        // LP Lockup: Remaining Pool USDC must be >= Total OI / 5
+        let total_long_oi: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+        let total_short_oi: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+        let total_oi = total_long_oi + total_short_oi;
+        
+        let remaining_usdc = total_usdc - payout;
+        if total_oi > remaining_usdc * 5 {
+            return Err(Error::InsufficientLiquidity); // Cannot withdraw, liquidity is backing active trades
+        }
 
         total_shares -= shares;
         total_usdc -= usdc_to_return;
@@ -137,29 +196,56 @@ impl SmartMarginContract {
         Ok(usdc_to_return)
     }
 
-    fn fetch_price(env: &Env) -> i128 {
-        let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
-        env.invoke_contract(
+    fn fetch_price(env: &Env) -> Result<i128, Error> {
+        let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).ok_or(Error::NotInitialized)?;
+        let price: i128 = env.invoke_contract(
             &oracle_addr,
             &Symbol::new(env, "get_price"),
             vec![env, Symbol::new(env, "BTC").into_val(env)]
-        )
+        );
+        if price <= 0 {
+            return Err(Error::OracleError);
+        }
+        Ok(price)
     }
 
     pub fn open_position(env: Env, user: Address, margin: i128, leverage: u32, is_long: bool, take_profit: i128, stop_loss: i128) -> Result<(), Error> {
         user.require_auth();
         
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
-        let entry_price = Self::fetch_price(&env);
-        let current_funding = Self::get_funding_rate(env.clone());
+        let entry_price = Self::fetch_price(&env)?;
         
         if margin <= 0 || leverage < 1 {
             return Err(Error::InvalidMargin);
         }
-
+        if leverage > 50 {
+            return Err(Error::ExcessiveLeverage);
+        }
+        if is_long {
+            if take_profit > 0 && take_profit <= entry_price { return Err(Error::InvalidOrder); }
+            if stop_loss > 0 && stop_loss >= entry_price { return Err(Error::InvalidOrder); }
+        } else {
+            if take_profit > 0 && take_profit >= entry_price { return Err(Error::InvalidOrder); }
+            if stop_loss > 0 && stop_loss <= entry_price { return Err(Error::InvalidOrder); }
+        }
         if env.storage().persistent().has(&DataKey::Position(user.clone())) {
             return Err(Error::PositionAlreadyExists);
         }
+
+        let position_size = margin * (leverage as i128);
+
+        // Max OI Cap: Total OI + new position cannot exceed 5x Total Pool USDC
+        let total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        let total_long_oi: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+        let total_short_oi: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+        
+        let total_oi = total_long_oi + total_short_oi + position_size;
+        if total_oi > total_usdc * 5 {
+            return Err(Error::InsufficientLiquidity);
+        }
+
+        Self::update_funding(&env);
+        let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
 
         let token_client = token::Client::new(&env, &token_addr);
         token_client.transfer(&user, &env.current_contract_address(), &margin);
@@ -173,16 +259,33 @@ impl SmartMarginContract {
             stop_loss,
             funding_index_at_entry: current_funding,
         };
-
         env.storage().persistent().set(&DataKey::Position(user), &position);
+
+        let mut total_volume: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+        total_volume += position_size;
+        env.storage().instance().set(&DataKey::TotalVolume, &total_volume);
+
+        if is_long {
+            let mut total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+            total_long += position_size;
+            env.storage().instance().set(&DataKey::TotalLongOI, &total_long);
+        } else {
+            let mut total_short: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+            total_short += position_size;
+            env.storage().instance().set(&DataKey::TotalShortOI, &total_short);
+        }
+
         Ok(())
     }
 
     pub fn close_position(env: Env, user: Address) -> Result<i128, Error> {
+        user.require_auth();
         let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
-        let current_price = Self::fetch_price(&env);
-        let current_funding = Self::get_funding_rate(env.clone());
+        let current_price = Self::fetch_price(&env)?;
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
+        
+        Self::update_funding(&env);
+        let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
         
         // PnL from Price Action
         let price_diff = if position.is_long {
@@ -192,12 +295,13 @@ impl SmartMarginContract {
         };
         let pnl = (price_diff * position.margin * (position.leverage as i128)) / position.entry_price;
         
-        // PnL from Funding Rates (Simple logic for demo: Longs pay shorts when positive)
+        // PnL from Funding Rates (scaled by position size)
+        let position_size = position.margin * (position.leverage as i128);
         let funding_diff = current_funding - position.funding_index_at_entry;
         let funding_pnl = if position.is_long {
-            -funding_diff // Longs lose money when rate goes up
+            -(funding_diff * position_size) / 10_000_000_000 // Longs pay when rate goes up
         } else {
-            funding_diff  // Shorts make money when rate goes up
+            (funding_diff * position_size) / 10_000_000_000  // Shorts earn when rate goes up
         };
 
         // Total Payout
@@ -205,7 +309,6 @@ impl SmartMarginContract {
         let mut payout = position.margin + final_pnl;
 
         if payout < 0 {
-            // Liquidated. Payout is 0, user loses entire margin.
             payout = 0;
             final_pnl = -position.margin;
         }
@@ -221,6 +324,18 @@ impl SmartMarginContract {
         env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
         env.storage().persistent().remove(&DataKey::Position(user.clone()));
 
+        // Remove from Open Interest
+        let position_size = position.margin * (position.leverage as i128);
+        if position.is_long {
+            let mut total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+            total_long -= position_size;
+            env.storage().instance().set(&DataKey::TotalLongOI, &total_long);
+        } else {
+            let mut total_short: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+            total_short -= position_size;
+            env.storage().instance().set(&DataKey::TotalShortOI, &total_short);
+        }
+
         if payout > 0 {
             let token_client = token::Client::new(&env, &token_addr);
             token_client.transfer(&env.current_contract_address(), &user, &payout);
@@ -229,10 +344,9 @@ impl SmartMarginContract {
         Ok(payout)
     }
 
-    /// Keepers call this to automatically trigger a user's Stop Loss or Take Profit
     pub fn trigger_orders(env: Env, user: Address) -> Result<i128, Error> {
         let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
-        let current_price = Self::fetch_price(&env);
+        let current_price = Self::fetch_price(&env)?;
         
         let mut should_trigger = false;
         

@@ -2,7 +2,7 @@
 extern crate std;
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger, Address, Env, Symbol};
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient as TokenAdminClient;
 
@@ -43,18 +43,32 @@ fn set_dummy_price(env: &Env, oracle_id: &Address, price: i128) {
     );
 }
 
+// In soroban SDK 22+, we can set timestamp via testutils
+fn advance_time(env: &Env, seconds: u64) {
+    let mut li = env.ledger().get();
+    li.timestamp += seconds;
+    env.ledger().set(li);
+}
+
 #[test]
-fn test_funding_rate_impact() {
+fn test_dynamic_skew_funding() {
     let env = Env::default();
     env.mock_all_auths();
 
+    // Start ledger at t=1000
+    let mut li = env.ledger().get();
+    li.timestamp = 1000;
+    env.ledger().set(li);
+
     let admin = Address::generate(&env);
     let lp = Address::generate(&env);
-    let user = Address::generate(&env);
+    let user1 = Address::generate(&env); // Long trader
+    let user2 = Address::generate(&env); // Short trader
 
     let (token, token_admin) = create_token_contract(&env, &admin);
     token_admin.mint(&lp, &10000_0000000);
-    token_admin.mint(&user, &1000_0000000);
+    token_admin.mint(&user1, &1000_0000000);
+    token_admin.mint(&user2, &1000_0000000);
 
     let client = setup(&env);
     let oracle_id = setup_oracle(&env);
@@ -63,18 +77,46 @@ fn test_funding_rate_impact() {
     client.add_liquidity(&lp, &10000_0000000);
     set_dummy_price(&env, &oracle_id, 60000_0000000);
 
-    // Funding rate starts at 0. User opens long.
-    client.open_position(&user, &100_0000000, &10, &true, &0, &0);
-
-    // Admin hikes funding rate to 20 USDC per margin unit
-    client.set_funding_rate(&admin, &20_0000000);
-
-    // Price stays the same, but user closes position. 
-    // They are long, rate went up by 20, so they owe 20 USDC.
-    let payout = client.close_position(&user);
+    // User 1 opens 10x Long with 100 USDC (Position size = 1000)
+    // Skew becomes +1000
+    client.open_position(&user1, &100_0000000, &10, &true, &0, &0);
     
-    // Expected: 100 margin - 20 funding loss = 80 USDC
-    assert_eq!(payout, 80_0000000);
+    let state1 = client.get_market_state();
+    assert_eq!(state1.0, 1000_0000000); // Long OI
+    assert_eq!(state1.1, 0);            // Short OI
+    assert_eq!(state1.2, 0);            // Global Funding Index (time hasn't passed)
+    assert_eq!(state1.3, 1000_0000000); // Total Volume
+
+    // Advance time by 100 seconds
+    advance_time(&env, 100);
+
+    // User 2 opens 10x Short with 100 USDC (Position size = 1000)
+    // This action will trigger `update_funding()`.
+    // Skew was +1000. Time = 100s.
+    // Funding added = (1000_0000000 * 100) / 10000 = 10000000 (which is 1 USDC).
+    client.open_position(&user2, &100_0000000, &10, &false, &0, &0);
+
+    let state2 = client.get_market_state();
+    assert_eq!(state2.0, 1000_0000000); // Long OI
+    assert_eq!(state2.1, 1000_0000000); // Short OI
+    assert_eq!(state2.2, 10_0000000);   // Global Funding is now 10 USDC
+    assert_eq!(state2.3, 2000_0000000); // Total Volume is now 2000
+
+    // Advance time by another 100 seconds
+    advance_time(&env, 100);
+
+    // Skew is now 0 (Long OI == Short OI). So funding shouldn't change when we close.
+    // User 1 (Long) closes. They entered at Index 0. Current Index is 10.
+    // Funding PnL = -(10_0000000 * 1000_0000000) / 10_000_000_000 = -10_0000000 = -10 USDC
+    let payout1 = client.close_position(&user1);
+    // 100 margin - 10 funding = 90 payout
+    assert_eq!(payout1, 90_0000000);
+
+    // User 2 (Short) closes. They entered at Index 10. Current Index is 10.
+    // Funding diff = 0, so funding PnL = 0.
+    let payout2 = client.close_position(&user2);
+    // 100 margin + 0 funding = 100 payout
+    assert_eq!(payout2, 100_0000000);
 }
 
 #[test]

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 const TIMEOUT_MS = 3000;
 
@@ -17,13 +17,20 @@ export interface WalletState {
   error: string | null;
   connect: () => void;
   disconnect: () => void;
-  signTransaction: (xdr: string, network?: string) => Promise<string>;
 }
 
 export function useWallet(): WalletState {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Rehydrate wallet state from local storage on mount
+    const saved = localStorage.getItem('freighterPublicKey');
+    if (saved) {
+      setPublicKey(saved);
+    }
+  }, []);
 
   const connect = useCallback(async () => {
     setConnecting(true);
@@ -49,6 +56,7 @@ export function useWallet(): WalletState {
       }
 
       setPublicKey(access.address);
+      localStorage.setItem('freighterPublicKey', access.address);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to connect wallet');
     } finally {
@@ -59,14 +67,8 @@ export function useWallet(): WalletState {
   const disconnect = useCallback(() => {
     setPublicKey(null);
     setError(null);
+    localStorage.removeItem('freighterPublicKey');
   }, []);
 
-  const signTransaction = useCallback(async (xdr: string, network?: string) => {
-    const freighter = await import('@stellar/freighter-api');
-    const result = await freighter.signTransaction(xdr, { network: network || 'TESTNET' });
-    if (result.error) throw new Error(result.error);
-    return result.signedTx;
-  }, []);
-
-  return { publicKey, connecting, error, connect, disconnect, signTransaction };
+  return { publicKey, connecting, error, connect, disconnect };
 }

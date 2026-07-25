@@ -25,12 +25,17 @@ $AdminAddr = (stellar keys address $Identity).Trim()
 $NativeToken = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
 # 2. Build the contracts
+$ErrorActionPreference = 'Stop'
+
 Write-Host "Building contracts..."
 stellar contract build
+if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
 # 3. Deploy Mock Oracle
-Write-Host "Deploying Mock Oracle..."
-$OracleId = (stellar contract deploy --wasm $OracleWasm --source-account $Identity --network $Network).Trim()
+Write-Host "`nDeploying Mock Oracle..."
+$OracleId = (stellar contract deploy --wasm $OracleWasm --source-account $Identity --network $Network) | Out-String
+$OracleId = $OracleId.Trim()
+if (-not $OracleId -or $LASTEXITCODE -ne 0) { throw "Mock Oracle deploy failed" }
 Write-Host "Deployed Oracle ID: $OracleId"
 
 # 4. Initialize Mock Oracle and set initial price
@@ -40,8 +45,10 @@ Write-Host "Setting initial BTC price to \$60,000..."
 stellar contract invoke --id $OracleId --source-account $Identity --network $Network -- set_price --admin $AdminAddr --symbol BTC --price 600000000000
 
 # 5. Deploy Smart Margin
-Write-Host "Deploying Smart Margin..."
-$MarginId = (stellar contract deploy --wasm $MarginWasm --source-account $Identity --network $Network).Trim()
+Write-Host "`nDeploying Smart Margin..."
+$MarginId = (stellar contract deploy --wasm $MarginWasm --source-account $Identity --network $Network) | Out-String
+$MarginId = $MarginId.Trim()
+if (-not $MarginId -or $LASTEXITCODE -ne 0) { throw "Smart Margin deploy failed" }
 Write-Host "Deployed Smart Margin ID: $MarginId"
 
 # 6. Initialize Smart Margin

@@ -1,45 +1,61 @@
 import { createChart, ColorType, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { MOCK_PRICE } from '@/lib/constants';
 
-const generateDummyData = (): CandlestickData<Time>[] => {
-  const data: CandlestickData<Time>[] = [];
-  let time = Math.floor(Date.now() / 1000) - 1000 * 60 * 5; // start ~83 hours ago
-  let close = 58500;
-  
-  for (let i = 0; i < 1000; i++) {
-    time += 60 * 5; // 5 min intervals
-    const open = close;
-    const high = open + Math.random() * 200;
-    const low = open - Math.random() * 200;
-    close = open + (Math.random() - 0.48) * 180; // Slight upward bias
-    
-    const finalClose = Math.max(low, Math.min(high, close));
-    
-    data.push({
-      time: time as Time,
-      open,
-      high,
-      low,
-      close: finalClose,
-    });
-  }
-  
-  // Ensure the last price aligns perfectly with our 60,000 mock price
-  const last = data[data.length - 1];
-  last.close = 60000;
-  if (last.high < 60000) last.high = 60005;
-  
-  return data;
-}
-
-export const DUMMY_DATA = generateDummyData();
-
-export const TradingChart = (props: { data: CandlestickData<Time>[] }) => {
-	const { data } = props;
+export const TradingChart = () => {
 	const chartContainerRef = useRef<HTMLDivElement>(null);
+    const [data, setData] = useState<CandlestickData<Time>[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const dataRef = useRef(data);
+    
+    useEffect(() => {
+        dataRef.current = data;
+    }, [data]);
+
+    useEffect(() => {
+        // Fetch real Binance data
+        const loadData = async () => {
+            try {
+                // Fetch 15-minute candlesticks for BTC-USDT
+                const res = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=1000');
+                const raw = await res.json();
+                
+                let formatted: CandlestickData<Time>[] = raw.map((d: (number | string)[]) => ({
+                    time: (Number(d[0]) / 1000) as Time,
+                    open: parseFloat(d[1] as string),
+                    high: parseFloat(d[2] as string),
+                    low: parseFloat(d[3] as string),
+                    close: parseFloat(d[4] as string),
+                }));
+
+                // To prevent a massive drop candle at the end, we calculate the difference
+                // between the real Binance price and our MOCK_PRICE, and shift the ENTIRE
+                // chart by that difference so the shape is identical but it ends at MOCK_PRICE.
+                if (formatted.length > 0) {
+                    const lastRealClose = formatted[formatted.length - 1].close;
+                    const priceOffset = lastRealClose - MOCK_PRICE;
+                    
+                    formatted = formatted.map(candle => ({
+                        ...candle,
+                        open: candle.open - priceOffset,
+                        high: candle.high - priceOffset,
+                        low: candle.low - priceOffset,
+                        close: candle.close - priceOffset,
+                    }));
+                }
+
+                setData(formatted);
+            } catch (e) {
+                console.error("Failed to load Binance data", e);
+                setError("Failed to load chart data from Binance.");
+            }
+        };
+        
+        loadData();
+    }, []);
 
 	useEffect(() => {
-		if (!chartContainerRef.current) return;
+		if (!chartContainerRef.current || data.length === 0) return;
 
 		const handleResize = () => {
 			chart.applyOptions({ width: chartContainerRef.current!.clientWidth });
@@ -47,7 +63,7 @@ export const TradingChart = (props: { data: CandlestickData<Time>[] }) => {
 
 		const chart = createChart(chartContainerRef.current, {
 			layout: {
-				background: { type: ColorType.Solid, color: '#0b0e14' }, // Matches bg-background
+				background: { type: ColorType.Solid, color: '#09090b' }, // Matches bg-background
 				textColor: '#9CA3AF', // text-muted
 			},
 			grid: {
@@ -76,36 +92,38 @@ export const TradingChart = (props: { data: CandlestickData<Time>[] }) => {
         
 		candlestickSeries.setData(data);
 
-        // Simulate real-time live price ticks
+        // Simulate real-time live price ticks tethered to MOCK_PRICE
         const intervalId = setInterval(() => {
-            const lastCandle = data[data.length - 1];
+            const currentData = [...dataRef.current];
+            if (currentData.length === 0) return;
+            const lastCandle = currentData[currentData.length - 1];
             const now = Math.floor(Date.now() / 1000);
             
-            // Start a new 5-minute candle if time has passed
-            if (now >= (lastCandle.time as number) + 300) {
+            // Start a new 15-minute candle if time has passed
+            if (now >= (lastCandle.time as number) + 900) {
                 const newCandle = {
-                    time: ((lastCandle.time as number) + 300) as Time,
+                    time: ((lastCandle.time as number) + 900) as Time,
                     open: lastCandle.close,
                     high: lastCandle.close,
                     low: lastCandle.close,
                     close: lastCandle.close,
                 };
-                data.push(newCandle);
+                currentData.push(newCandle);
                 candlestickSeries.update(newCandle);
+                setData(currentData);
             } else {
                 // Wiggle the current candle by up to $15
-                const current = data[data.length - 1];
                 const tick = (Math.random() - 0.5) * 30; 
                 
-                // Keep it tethered closely to 60k for the demo
-                if (current.close > 60050) current.close -= Math.abs(tick);
-                else if (current.close < 59950) current.close += Math.abs(tick);
-                else current.close += tick;
+                // Keep it tethered closely to MOCK_PRICE for the demo
+                if (lastCandle.close > MOCK_PRICE + 50) lastCandle.close -= Math.abs(tick);
+                else if (lastCandle.close < MOCK_PRICE - 50) lastCandle.close += Math.abs(tick);
+                else lastCandle.close += tick;
 
-                if (current.close > current.high) current.high = current.close;
-                if (current.close < current.low) current.low = current.close;
+                if (lastCandle.close > lastCandle.high) lastCandle.high = lastCandle.close;
+                if (lastCandle.close < lastCandle.low) lastCandle.low = lastCandle.close;
                 
-                candlestickSeries.update({ ...current });
+                candlestickSeries.update({ ...lastCandle });
             }
         }, 800); // Tick every 800ms
 
@@ -117,6 +135,14 @@ export const TradingChart = (props: { data: CandlestickData<Time>[] }) => {
 			chart.remove();
 		};
 	}, [data]);
+
+	if (error) {
+        return (
+            <div className="w-full h-full flex items-center justify-center text-danger border border-dashed border-danger/30 rounded-lg p-6 bg-danger/5">
+                {error}
+            </div>
+        );
+    }
 
 	return (
 		<div
