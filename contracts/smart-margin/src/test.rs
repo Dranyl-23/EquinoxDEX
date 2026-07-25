@@ -3,19 +3,19 @@ extern crate std;
 
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, Env};
-use soroban_sdk::token;
+
 use soroban_sdk::token::Client as TokenClient;
 use soroban_sdk::token::StellarAssetClient as TokenAdminClient;
 
 fn create_token_contract<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, TokenAdminClient<'a>) {
-    let contract_address = env.register_stellar_asset_contract(admin.clone());
+    let contract_address = env.register_stellar_asset_contract_v2(admin.clone()).address();
     (
         TokenClient::new(env, &contract_address),
         TokenAdminClient::new(env, &contract_address),
     )
 }
 
-fn setup(env: &Env) -> SmartMarginContractClient {
+fn setup(env: &Env) -> SmartMarginContractClient<'_> {
     let contract_id = env.register(SmartMarginContract, ());
     SmartMarginContractClient::new(env, &contract_id)
 }
