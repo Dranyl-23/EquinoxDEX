@@ -25,8 +25,8 @@ export default function Leaderboard() {
           const pnl = await readUserPnL(publicKey);
           setUserPnl(pnl);
         }
-      } catch (e) {
-        console.error('Failed to load leaderboard', e);
+      } catch {
+        // Silently swallow background polling glitches
       } finally {
         setLoading(false);
       }

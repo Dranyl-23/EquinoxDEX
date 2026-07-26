@@ -31,8 +31,8 @@ export default function Portfolio() {
         }
         const state = await readPoolState(publicKey || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
         setPoolState(state);
-      } catch (e) {
-        console.error(e);
+      } catch {
+        // Silently swallow background polling glitches
       }
     };
     load();

@@ -344,30 +344,34 @@ export async function buildUpdateTrailingStopXDR(sender: string): Promise<string
  * Read the total pool state and the user's specific shares.
  */
 export async function readPoolState(userAddress: string): Promise<{ totalPool: number; totalShares: number; userShares: number }> {
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      contract.call('get_pool_state', new Address(userAddress).toScVal())
-    )
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call('get_pool_state', new Address(userAddress).toScVal())
+      )
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return { totalPool: 0, totalShares: 0, userShares: 0 };
+    }
+
+    const res = scValToNative(sim.result.retval) as [bigint, bigint, bigint];
+    return {
+      totalPool: Number(res[0]),
+      totalShares: Number(res[1]),
+      userShares: Number(res[2]),
+    };
+  } catch {
     return { totalPool: 0, totalShares: 0, userShares: 0 };
   }
-
-  const res = scValToNative(sim.result.retval) as [bigint, bigint, bigint];
-  return {
-    totalPool: Number(res[0]),
-    totalShares: Number(res[1]),
-    userShares: Number(res[2]),
-  };
 }
 
 /**
@@ -437,52 +441,60 @@ export interface LeaderboardEntry {
 
 /** Read global leaderboard via simulation */
 export async function readLeaderboard(): Promise<LeaderboardEntry[]> {
-  if (!contractConfigured()) return [];
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    if (!contractConfigured()) return [];
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(contract.call('get_leaderboard'))
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(contract.call('get_leaderboard'))
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return [];
+    }
+    
+    const res = scValToNative(sim.result.retval) as { user: string; total_pnl: bigint }[];
+    if (!res) return [];
+    return res.map(r => ({
+      user: r.user,
+      total_pnl: Number(r.total_pnl)
+    }));
+  } catch {
     return [];
   }
-  
-  const res = scValToNative(sim.result.retval) as { user: string; total_pnl: bigint }[];
-  if (!res) return [];
-  return res.map(r => ({
-    user: r.user,
-    total_pnl: Number(r.total_pnl)
-  }));
 }
 
 /** Read user PnL via simulation */
 export async function readUserPnL(userAddress: string): Promise<number> {
-  if (!contractConfigured() || !userAddress) return 0;
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    if (!contractConfigured() || !userAddress) return 0;
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(contract.call('get_user_pnl', new Address(userAddress).toScVal()))
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(contract.call('get_user_pnl', new Address(userAddress).toScVal()))
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return 0;
+    }
+    
+    const res = scValToNative(sim.result.retval) as bigint;
+    return Number(res);
+  } catch {
     return 0;
   }
-  
-  const res = scValToNative(sim.result.retval) as bigint;
-  return Number(res);
 }
 /**
  * Build + simulate + assemble an unsigned `deposit_margin` invocation.
