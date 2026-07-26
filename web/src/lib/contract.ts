@@ -43,117 +43,129 @@ export function contractConfigured(): boolean {
 
 /** Read global market state via simulation */
 export async function readMarketState(): Promise<{ long_oi: number; short_oi: number; global_funding: number; total_volume: number }> {
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(contract.call('get_market_state'))
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(contract.call('get_market_state'))
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return { long_oi: 0, short_oi: 0, global_funding: 0, total_volume: 0 };
+    }
+    
+    const res = scValToNative(sim.result.retval) as [bigint, bigint, bigint, bigint];
+    return {
+      long_oi: Number(res[0]),
+      short_oi: Number(res[1]),
+      global_funding: Number(res[2]),
+      total_volume: Number(res[3])
+    };
+  } catch {
     return { long_oi: 0, short_oi: 0, global_funding: 0, total_volume: 0 };
   }
-  
-  const res = scValToNative(sim.result.retval) as [bigint, bigint, bigint, bigint];
-  return {
-    long_oi: Number(res[0]),
-    short_oi: Number(res[1]),
-    global_funding: Number(res[2]),
-    total_volume: Number(res[3])
-  };
 }
 
 /** Read position via simulation — no wallet or signature required. */
 export async function readPosition(userAddress: string): Promise<Position | null> {
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      contract.call('get_position', new Address(userAddress).toScVal())
-    )
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call('get_position', new Address(userAddress).toScVal())
+      )
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return null;
+    }
+
+    const pos = scValToNative(sim.result.retval) as {
+      margin: bigint;
+      leverage: number;
+      entry_price: bigint;
+      is_long: boolean;
+      take_profit: bigint;
+      stop_loss: bigint;
+      funding_index_at_entry: bigint;
+      trailing_stop_distance: bigint;
+    };
+    
+    return {
+      margin: Number(pos.margin),
+      leverage: pos.leverage,
+      entry_price: Number(pos.entry_price),
+      is_long: pos.is_long,
+      take_profit: Number(pos.take_profit),
+      stop_loss: Number(pos.stop_loss),
+      funding_index_at_entry: Number(pos.funding_index_at_entry),
+      trailing_stop_distance: Number(pos.trailing_stop_distance),
+    };
+  } catch {
     return null;
   }
-
-  const pos = scValToNative(sim.result.retval) as {
-    margin: bigint;
-    leverage: number;
-    entry_price: bigint;
-    is_long: boolean;
-    take_profit: bigint;
-    stop_loss: bigint;
-    funding_index_at_entry: bigint;
-    trailing_stop_distance: bigint;
-  };
-  
-  return {
-    margin: Number(pos.margin),
-    leverage: pos.leverage,
-    entry_price: Number(pos.entry_price),
-    is_long: pos.is_long,
-    take_profit: Number(pos.take_profit),
-    stop_loss: Number(pos.stop_loss),
-    funding_index_at_entry: Number(pos.funding_index_at_entry),
-    trailing_stop_distance: Number(pos.trailing_stop_distance),
-  };
 }
 
 /** Read limit orders */
 export async function readLimitOrders(userAddress: string): Promise<Order[]> {
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      contract.call('get_limit_orders', new Address(userAddress).toScVal())
-    )
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call('get_limit_orders', new Address(userAddress).toScVal())
+      )
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return [];
+    }
+
+    const scVals = sim.result.retval.value() as unknown[];
+    if (!Array.isArray(scVals)) return [];
+
+    return scVals.map(val => {
+      const obj = scValToNative(val as never) as {
+        margin: bigint;
+        leverage: number;
+        is_long: boolean;
+        trigger_price: bigint;
+        take_profit: bigint;
+        stop_loss: bigint;
+        trailing_stop_distance: bigint;
+      };
+      return {
+        margin: Number(obj.margin),
+        leverage: obj.leverage,
+        is_long: obj.is_long,
+        trigger_price: Number(obj.trigger_price),
+        take_profit: Number(obj.take_profit),
+        stop_loss: Number(obj.stop_loss),
+        trailing_stop_distance: Number(obj.trailing_stop_distance),
+      };
+    });
+  } catch {
     return [];
   }
-
-  const scVals = sim.result.retval.value() as unknown[];
-  if (!Array.isArray(scVals)) return [];
-
-  return scVals.map(val => {
-    const obj = scValToNative(val as never) as {
-      margin: bigint;
-      leverage: number;
-      is_long: boolean;
-      trigger_price: bigint;
-      take_profit: bigint;
-      stop_loss: bigint;
-      trailing_stop_distance: bigint;
-    };
-    return {
-      margin: Number(obj.margin),
-      leverage: obj.leverage,
-      is_long: obj.is_long,
-      trigger_price: Number(obj.trigger_price),
-      take_profit: Number(obj.take_profit),
-      stop_loss: Number(obj.stop_loss),
-      trailing_stop_distance: Number(obj.trailing_stop_distance),
-    };
-  });
 }
 
 /**
@@ -589,23 +601,27 @@ export async function buildAddSessionKeyXDR(sender: string, sessionKeyPublicKey:
  * Read margin balance
  */
 export async function readMarginBalance(userAddress: string): Promise<number> {
-  const contract = new Contract(CONTRACT_ID);
-  const source = new Account(READ_SOURCE, '0');
+  try {
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
 
-  const tx = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      contract.call('get_margin_balance', new Address(userAddress).toScVal())
-    )
-    .setTimeout(30)
-    .build();
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call('get_margin_balance', new Address(userAddress).toScVal())
+      )
+      .setTimeout(30)
+      .build();
 
-  const sim = await server.simulateTransaction(tx);
-  if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return 0;
+    }
+
+    return Number(scValToNative(sim.result.retval));
+  } catch {
     return 0;
   }
-
-  return Number(scValToNative(sim.result.retval));
 }

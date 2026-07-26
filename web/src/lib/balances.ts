@@ -28,12 +28,7 @@ export async function fetchBalances(publicKey: string): Promise<Balances> {
       }
     }
     return { xlm, usdc, funded: true };
-  } catch (e: unknown) {
-    // 404 = account does not exist yet (not funded).
-    const status = (e as { response?: { status?: number } })?.response?.status;
-    if (status === 404 || (e as { name?: string })?.name === 'NotFoundError') {
-      return { xlm: '0', usdc: '0', funded: false };
-    }
-    throw e;
+  } catch {
+    return { xlm: '0', usdc: '0', funded: false };
   }
 }

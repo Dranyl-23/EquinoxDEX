@@ -62,8 +62,8 @@ export default function Home() {
         setLimitOrders(orders);
         const state = await readMarketState();
         setMarketState(state);
-      } catch (e) {
-        console.error(e);
+      } catch {
+        // Silently swallow background RPC network polling glitches
       }
     };
     load();
