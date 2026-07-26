@@ -2,14 +2,14 @@
 import React from 'react';
 import { DECIMALS } from '@/lib/constants';
 
-interface MarketHeaderProps {
+export interface MarketHeaderProps {
   currentPrice: number;
   marketState: { long_oi: number; short_oi: number; global_funding: number; total_volume: number };
   loading?: boolean;
   error?: string | null;
 }
 
-export const MarketHeader: React.FC<MarketHeaderProps> = ({ currentPrice, marketState, loading, error }) => {
+export function MarketHeader({ currentPrice, marketState, loading, error }: MarketHeaderProps) {
   const skew = marketState.long_oi - marketState.short_oi;
   const skewDisplay = (skew / DECIMALS).toLocaleString();
   const isSkewLong = skew > 0;
@@ -29,22 +29,29 @@ export const MarketHeader: React.FC<MarketHeaderProps> = ({ currentPrice, market
           </span>
         )}
       </div>
-      <div className="text-xs text-muted flex gap-4 bg-background px-3 py-1.5 rounded-lg border border-border">
-        <div className="flex flex-col border-r border-border pr-3">
-          <span className="text-muted/70 mb-0.5">Total Volume</span>
-          <span className="font-mono text-white">${(marketState.total_volume / DECIMALS).toLocaleString()}</span>
+
+      <div className="flex items-center gap-6 text-sm">
+        <div>
+          <div className="text-muted text-xs">Global Skew</div>
+          <div className={`font-medium ${isSkewLong ? 'text-brand' : isSkewShort ? 'text-danger' : 'text-white'}`}>
+            {isSkewLong ? `+${skewDisplay} USDC` : `${skewDisplay} USDC`}
+          </div>
         </div>
-        <div className="flex flex-col border-r border-border pr-3 pl-1">
-          <span className="text-muted/70 mb-0.5">Global Skew</span>
-          <span className={`font-mono font-bold ${isSkewLong ? 'text-brand' : isSkewShort ? 'text-danger' : 'text-white'}`}>
-            {skew === 0 ? 'Balanced' : `${isSkewLong ? 'Long' : 'Short'} $${Math.abs(Number(skewDisplay))}`}
-          </span>
+
+        <div>
+          <div className="text-muted text-xs">Global Funding Rate</div>
+          <div className="font-medium text-white">
+            {((marketState.global_funding / DECIMALS) * 100).toFixed(4)}% / hr
+          </div>
         </div>
-        <div className="flex flex-col pl-1">
-          <span className="text-muted/70 mb-0.5">Acc. Funding Index</span>
-          <span className="font-mono text-white">{marketState.global_funding / DECIMALS} USDC / Unit</span>
+
+        <div>
+          <div className="text-muted text-xs">Total Volume</div>
+          <div className="font-medium text-white">
+            ${(marketState.total_volume / DECIMALS).toLocaleString()}
+          </div>
         </div>
       </div>
     </div>
   );
-};
+}
