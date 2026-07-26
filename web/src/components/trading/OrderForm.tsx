@@ -74,10 +74,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const isOrderValid = isValidMargin && isValidTrigger && isValidTp && isValidSl && isValidTrailing;
 
-  // H7 FIX: Account Equity includes both price PnL and funding PnL (pnl already aggregates both)
   const accountEquity = (marginBalance / DECIMALS) + (position ? pnl : 0);
 
-  // H8 FIX: Prevent NaN/Infinity division by zero when account equity is 0 or negative
   const marginUsagePercent = position && accountEquity > 0
     ? ((position.margin / DECIMALS) / accountEquity) * 100
     : 0;
@@ -94,7 +92,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       slInput,
       trailingInput,
     });
-    // Clear inputs on success
     setMarginInput('');
     setTriggerInput('');
     setTpInput('');
@@ -121,7 +118,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         <span className="font-semibold text-white">Place Order</span>
       </div>
       
-      <div className="p-4 flex flex-col gap-5">
+      <div className="p-4 flex flex-col gap-4">
         
         {/* Order Tab Toggle (Market / Limit) */}
         <div className="flex gap-4 text-sm font-medium border-b border-border pb-2">
@@ -166,7 +163,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 placeholder="Market Price" 
                 value={triggerInput}
                 onChange={(e) => setTriggerInput(e.target.value)}
-                className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
+                className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono text-sm"
               />
               <span className="absolute right-3 top-2.5 text-sm text-muted">$</span>
             </div>
@@ -185,14 +182,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               placeholder="0.00" 
               value={marginInput}
               onChange={(e) => setMarginInput(e.target.value)}
-              className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
+              className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono text-sm"
             />
             <span className="absolute right-3 top-2.5 text-sm text-muted">USDC</span>
           </div>
         </div>
 
         {/* Leverage Slider */}
-        <div className="flex flex-col gap-1.5 mt-2">
+        <div className="flex flex-col gap-1.5">
           <div className="flex justify-between text-xs">
             <span className="text-muted">Leverage</span>
             <span className="text-white font-mono">{leverage}x</span>
@@ -206,12 +203,45 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             className="w-full accent-brand"
           />
         </div>
-        
-        <div className="border-t border-border/50 pt-4 mt-2">
+
+        {/* Position Summary & Primary Action Button */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-border/50 text-xs">
+          <div className="flex justify-between">
+            <span className="text-muted">Position Size</span>
+            <span className="font-mono text-white">{sizeInBtc} BTC</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Notional Value</span>
+            <span className="font-mono text-white">${sizeVal.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Primary Order Action Button */}
+        <div className="relative">
+          <div className={`absolute inset-0 blur-md opacity-50 ${positionType === 'Long' ? 'bg-brand' : 'bg-danger'}`}></div>
+          <button 
+            onClick={handleSubmitOrder}
+            disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
+            className={`relative w-full py-3.5 rounded-lg font-bold text-white transition-all transform hover:scale-[1.01] active:scale-[0.99]
+              ${positionType === 'Long' ? 'bg-linear-to-r from-brand to-brand-hover shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'bg-linear-to-r from-danger to-danger-hover shadow-[0_0_20px_rgba(239,68,68,0.3)]'}
+              ${(!publicKey || !isOrderValid || isSubmitting || position !== null) ? 'opacity-50 cursor-not-allowed transform-none' : ''}
+            `}
+          >
+          {isSubmitting ? 'Processing Order...' : 
+           !publicKey ? 'Connect Wallet to Trade' : 
+           position !== null ? 'Position Already Open' :
+           !isValidMargin ? 'Enter Margin' :
+           !isValidTrigger ? 'Enter Trigger Price' :
+           !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
+           `${positionType === 'Long' ? 'Buy / Long BTC' : 'Sell / Short BTC'}`}
+          </button>
+        </div>
+
+        {/* Advanced Orders (Optional) */}
+        <div className="border-t border-border/50 pt-3 mt-1">
           <span className="text-xs font-semibold text-muted mb-2 block">Advanced Orders (Optional)</span>
           
-          {/* Take Profit */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             <div className="flex justify-between text-xs text-muted">
               <span>Take Profit Price</span>
             </div>
@@ -221,15 +251,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 placeholder="0.00" 
                 value={tpInput}
                 onChange={(e) => setTpInput(e.target.value)}
-                className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
+                className="w-full bg-background border border-border rounded px-3 py-1.5 text-white outline-none focus:border-brand transition-colors font-mono text-xs"
               />
-              <span className="absolute right-3 top-2.5 text-sm text-muted">$</span>
+              <span className="absolute right-3 top-2 text-xs text-muted">$</span>
             </div>
-          </div>
 
-          {/* Stop Loss */}
-          <div className="flex flex-col gap-2 mt-3">
-            <div className="flex justify-between text-xs text-muted">
+            <div className="flex justify-between text-xs text-muted mt-1">
               <span>Stop Loss Price</span>
             </div>
             <div className="relative">
@@ -238,15 +265,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 placeholder="0.00" 
                 value={slInput}
                 onChange={(e) => setSlInput(e.target.value)}
-                className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
+                className="w-full bg-background border border-border rounded px-3 py-1.5 text-white outline-none focus:border-brand transition-colors font-mono text-xs"
               />
-              <span className="absolute right-3 top-2.5 text-sm text-muted">$</span>
+              <span className="absolute right-3 top-2 text-xs text-muted">$</span>
             </div>
-          </div>
 
-          {/* Trailing Stop Distance */}
-          <div className="flex flex-col gap-2 mt-3">
-            <div className="flex justify-between text-xs text-muted">
+            <div className="flex justify-between text-xs text-muted mt-1">
               <span>Trailing Stop Distance</span>
             </div>
             <div className="relative">
@@ -255,21 +279,20 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 placeholder="0" 
                 value={trailingInput}
                 onChange={(e) => setTrailingInput(e.target.value)}
-                className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
+                className="w-full bg-background border border-border rounded px-3 py-1.5 text-white outline-none focus:border-brand transition-colors font-mono text-xs"
               />
-              <span className="absolute right-3 top-2.5 text-sm text-muted">$</span>
+              <span className="absolute right-3 top-2 text-xs text-muted">$</span>
             </div>
           </div>
         </div>
 
         {/* Cross-Margin Account Management */}
-        <div className="border-t border-border/50 pt-4 mt-2">
+        <div className="border-t border-border/50 pt-3 mt-1">
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs font-semibold text-muted">Cross-Margin Account</span>
             <span className="text-sm font-mono font-bold text-white">{(marginBalance / DECIMALS).toFixed(2)} USDC</span>
           </div>
           
-          {/* Account Equity & Margin Usage */}
           <div className="flex justify-between items-center mb-2 px-2 py-1.5 bg-background rounded border border-border/50">
             <div className="flex flex-col">
               <span className="text-[10px] text-muted">Account Equity</span>
@@ -290,7 +313,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               placeholder="Amount" 
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
-              className="w-1/2 bg-background border border-border rounded px-2 py-1 text-sm text-white outline-none focus:border-brand transition-colors font-mono"
+              className="w-1/2 bg-background border border-border rounded px-2 py-1 text-xs text-white outline-none focus:border-brand transition-colors font-mono"
             />
             <button 
               onClick={handleDepositClick}
@@ -335,38 +358,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           )}
         </div>
 
-        {/* Order Summary */}
-        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted text-xs">Position Size</span>
-            <span className="font-mono text-white">{sizeInBtc} BTC</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted text-xs">Value</span>
-            <span className="font-mono text-white">${sizeVal.toLocaleString()}</span>
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <div className="relative mt-2">
-          <div className={`absolute inset-0 blur-md opacity-50 ${positionType === 'Long' ? 'bg-brand' : 'bg-danger'}`}></div>
-          <button 
-            onClick={handleSubmitOrder}
-            disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
-            className={`relative w-full py-4 rounded-lg font-bold text-white transition-all transform hover:scale-[1.02] active:scale-[0.98]
-              ${positionType === 'Long' ? 'bg-linear-to-r from-brand to-brand-hover shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'bg-linear-to-r from-danger to-danger-hover shadow-[0_0_20px_rgba(239,68,68,0.3)]'}
-              ${(!publicKey || !isOrderValid || isSubmitting || position !== null) ? 'opacity-50 cursor-not-allowed transform-none' : ''}
-            `}
-          >
-          {isSubmitting ? 'Processing...' : 
-           !publicKey ? 'Connect Wallet' : 
-           position !== null ? 'Position Already Open' :
-           !isValidMargin ? 'Enter Margin' :
-           !isValidTrigger ? 'Enter Valid Trigger Price' :
-           !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
-           `${positionType === 'Long' ? 'Buy / Long' : 'Sell / Short'}`}
-          </button>
-        </div>
       </div>
     </div>
   );
