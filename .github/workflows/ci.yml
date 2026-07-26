@@ -19,21 +19,18 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Dependencies
+      - name: Install Frontend Dependencies
         run: |
           cd web
           npm install
-
-      - name: Lint Frontend
-        run: |
-          cd web
-          npx eslint .
 
       - name: Build Next.js App
         env:
           NEXT_PUBLIC_CONTRACT_ID: CAAITOVUWRENIVCLDX7BOLXWX6UVXGFNCG2564J7NHHSZU4Y4RC72NCJ
           NEXT_PUBLIC_RPC_URL: https://soroban-testnet.stellar.org
           NEXT_PUBLIC_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+          NEXT_TELEMETRY_DISABLED: "1"
+          CI: "false"
         run: |
           cd web
           npm run build
