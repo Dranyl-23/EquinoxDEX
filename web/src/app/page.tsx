@@ -190,7 +190,7 @@ export default function Home() {
     try {
       const amtScaled = parseFloat(amountStr) * DECIMALS;
       const xdr = await buildDepositMarginXDR(publicKey, amtScaled);
-      await signAndSubmit(xdr, publicKey);
+      await signAndSubmit(xdr, publicKey, true);
 
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
@@ -210,7 +210,7 @@ export default function Home() {
       const amtScaled = parseFloat(amountStr) * DECIMALS;
       // H4 FIX ALIGNMENT: Withdrawals require direct user authentication (publicKey), not session keys
       const xdr = await buildWithdrawMarginXDR(publicKey, publicKey, amtScaled);
-      await signAndSubmit(xdr, publicKey);
+      await signAndSubmit(xdr, publicKey, true);
 
       const bal = await fetchBalances(publicKey);
       setBalances(bal);

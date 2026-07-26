@@ -48,7 +48,7 @@ export default function Portfolio() {
       const scaledAmount = parseFloat(depositAmount) * DECIMALS;
       const tokenAddress = selectedAsset === 'USDC' ? USDC_TOKEN_ID : XLM_TOKEN_ID;
       const xdr = await buildAddLiquidityXDR(publicKey, tokenAddress, scaledAmount);
-      await signAndSubmit(xdr, publicKey);
+      await signAndSubmit(xdr, publicKey, true);
       setDepositAmount('');
       
       const bal = await fetchBalances(publicKey);
@@ -81,7 +81,7 @@ export default function Portfolio() {
       
       const tokenAddress = selectedAsset === 'USDC' ? USDC_TOKEN_ID : XLM_TOKEN_ID;
       const xdr = await buildRemoveLiquidityXDR(publicKey, tokenAddress, sharesToWithdraw);
-      await signAndSubmit(xdr, publicKey);
+      await signAndSubmit(xdr, publicKey, true);
       setWithdrawAmount('');
       
       const bal = await fetchBalances(publicKey);
