@@ -204,40 +204,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           />
         </div>
 
-        {/* Position Summary & Primary Action Button */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-border/50 text-xs">
-          <div className="flex justify-between">
-            <span className="text-muted">Position Size</span>
-            <span className="font-mono text-white">{sizeInBtc} BTC</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Notional Value</span>
-            <span className="font-mono text-white">${sizeVal.toLocaleString()}</span>
-          </div>
-        </div>
-
-        {/* Primary Order Action Button */}
-        <button 
-          onClick={handleSubmitOrder}
-          disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
-          className={`w-full py-3.5 rounded-lg font-bold text-sm transition-all text-center border
-            ${(!publicKey || !isOrderValid || isSubmitting || position !== null)
-              ? 'bg-panel/90 text-muted/70 border-border/60 cursor-not-allowed'
-              : positionType === 'Long'
-                ? 'bg-brand hover:bg-brand-hover text-white border-brand/50 shadow-lg shadow-brand/20 active:scale-[0.99]'
-                : 'bg-danger hover:bg-danger-hover text-white border-danger/50 shadow-lg shadow-danger/20 active:scale-[0.99]'
-            }
-          `}
-        >
-        {isSubmitting ? 'Processing Order...' : 
-         !publicKey ? 'Connect Wallet to Trade' : 
-         position !== null ? 'Position Already Open' :
-         !isValidMargin ? 'Enter Margin' :
-         !isValidTrigger ? 'Enter Trigger Price' :
-         !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
-         `${positionType === 'Long' ? 'Buy / Long BTC' : 'Sell / Short BTC'}`}
-        </button>
-
         {/* Advanced Orders (Optional) */}
         <div className="border-t border-border/50 pt-3 mt-1">
           <span className="text-xs font-semibold text-muted mb-2 block">Advanced Orders (Optional)</span>
@@ -358,6 +324,40 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             </p>
           )}
         </div>
+
+        {/* Position Summary & Primary Action Button at Bottom */}
+        <div className="flex flex-col gap-2 pt-3 border-t border-border/50 text-xs mt-1">
+          <div className="flex justify-between">
+            <span className="text-muted">Position Size</span>
+            <span className="font-mono text-white">{sizeInBtc} BTC</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Notional Value</span>
+            <span className="font-mono text-white">${sizeVal.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Primary Order Action Button */}
+        <button 
+          onClick={handleSubmitOrder}
+          disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
+          className={`w-full py-3.5 rounded-lg font-bold text-sm transition-all text-center border mb-2
+            ${(!publicKey || !isOrderValid || isSubmitting || position !== null)
+              ? 'bg-panel/90 text-muted/70 border-border/60 cursor-not-allowed'
+              : positionType === 'Long'
+                ? 'bg-brand hover:bg-brand-hover text-white border-brand/50 shadow-lg shadow-brand/20 active:scale-[0.99]'
+                : 'bg-danger hover:bg-danger-hover text-white border-danger/50 shadow-lg shadow-danger/20 active:scale-[0.99]'
+            }
+          `}
+        >
+        {isSubmitting ? 'Processing Order...' : 
+         !publicKey ? 'Connect Wallet to Trade' : 
+         position !== null ? 'Position Already Open' :
+         !isValidMargin ? 'Enter Margin' :
+         !isValidTrigger ? 'Enter Trigger Price' :
+         !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
+         `${positionType === 'Long' ? 'Buy / Long BTC' : 'Sell / Short BTC'}`}
+        </button>
 
       </div>
     </div>
