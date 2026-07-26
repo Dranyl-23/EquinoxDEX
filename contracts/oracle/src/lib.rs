@@ -17,6 +17,11 @@ impl MockOracleContract {
             panic!("already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        
+        // Setup initial mock prices (scaled 10^7)
+        env.storage().instance().set(&DataKey::Price(Symbol::new(&env, "BTC")), &60000_0000000i128);
+        env.storage().instance().set(&DataKey::Price(Symbol::new(&env, "XLM")), &10_000000i128); // $1.00 for easy math
+        env.storage().instance().set(&DataKey::Price(Symbol::new(&env, "USDC")), &10_000000i128); // $1.00
     }
 
     pub fn set_price(env: Env, admin: Address, symbol: Symbol, price: i128) {

@@ -11,6 +11,26 @@ pub struct Position {
     pub take_profit: i128,          
     pub stop_loss: i128,            
     pub funding_index_at_entry: i128, 
+    pub trailing_stop_distance: i128,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct Order {
+    pub margin: i128,
+    pub leverage: u32,
+    pub is_long: bool,
+    pub trigger_price: i128,
+    pub take_profit: i128,
+    pub stop_loss: i128,
+    pub trailing_stop_distance: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LeaderboardEntry {
+    pub user: Address,
+    pub total_pnl: i128,
 }
 
 #[contracttype]
@@ -20,13 +40,20 @@ pub enum DataKey {
     OracleAddress,
     Position(Address),
     TotalShares,
-    TotalPoolUsdc,
     LpBalance(Address),
     GlobalFundingRate,
     TotalLongOI,
     TotalShortOI,
     LastFundingTime,
     TotalVolume,
+    LimitOrders(Address),
+    PoolBalance(Address), // token_address -> pool balance
+    SupportedTokensArray, // Vec<Address>
+    SupportedTokenSymbol(Address), // token_address -> Symbol
+    UserTotalPnL(Address),
+    GlobalLeaderboard,
+    SessionKey(Address),
+    MarginBalance(Address),
 }
 
 #[contracterror]
@@ -57,19 +84,100 @@ impl SmartMarginContract {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::UsdcToken, &usdc_token);
         env.storage().instance().set(&DataKey::OracleAddress, &oracle_address);
         
         env.storage().instance().set(&DataKey::TotalShares, &0i128);
-        env.storage().instance().set(&DataKey::TotalPoolUsdc, &0i128);
         
         env.storage().instance().set(&DataKey::GlobalFundingRate, &0i128);
         env.storage().instance().set(&DataKey::TotalLongOI, &0i128);
         env.storage().instance().set(&DataKey::TotalShortOI, &0i128);
         env.storage().instance().set(&DataKey::LastFundingTime, &env.ledger().timestamp());
         env.storage().instance().set(&DataKey::TotalVolume, &0i128);
+        
+        let empty_tokens: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(&env);
+        env.storage().instance().set(&DataKey::SupportedTokensArray, &empty_tokens);
         Ok(())
+    }
+
+    /// App-Level Auth Delegation (Session Keys)
+    pub fn add_session_key(env: Env, user: Address, session_key: Address) {
+        user.require_auth();
+        env.storage().persistent().set(&DataKey::SessionKey(user.clone()), &session_key);
+        env.storage().persistent().extend_ttl(&DataKey::SessionKey(user), 10_000, 100_000);
+    }
+
+    pub fn remove_session_key(env: Env, user: Address) {
+        user.require_auth();
+        env.storage().persistent().remove(&DataKey::SessionKey(user));
+    }
+
+    fn verify_caller(env: &Env, user: &Address, caller: &Address) -> Result<(), Error> {
+        if user == caller {
+            user.require_auth();
+            Ok(())
+        } else {
+            let registered_key: Address = env.storage().persistent()
+                .get(&DataKey::SessionKey(user.clone()))
+                .ok_or(Error::Unauthorized)?;
+            
+            if caller == &registered_key {
+                caller.require_auth();
+                Ok(())
+            } else {
+                Err(Error::Unauthorized)
+            }
+        }
+    }
+
+    /// Internal Account Balances (Required for Session Keys to bypass token auth)
+    pub fn deposit_margin(env: Env, user: Address, amount: i128) {
+        user.require_auth();
+        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&user, &env.current_contract_address(), &amount);
+
+        let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+        bal += amount;
+        env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &bal);
+        env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user), 10_000, 100_000);
+    }
+
+    pub fn withdraw_margin(env: Env, _caller: Address, user: Address, amount: i128) -> Result<(), Error> {
+        user.require_auth(); // H4 FIX: Require direct user auth; session keys cannot withdraw funds!
+        let bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+        if bal < amount {
+            return Err(Error::InvalidMargin);
+        }
+
+        // C1 FIX: Calculate reserved margin from open position
+        let reserved_margin: i128 = env.storage().persistent()
+            .get(&DataKey::Position(user.clone()))
+            .map(|p: Position| p.margin)
+            .unwrap_or(0);
+        
+        let available = bal - reserved_margin;
+        if amount > available {
+            return Err(Error::InvalidMargin); // Cannot withdraw margin backing an open position
+        }
+
+        let new_bal = bal - amount;
+        env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &new_bal);
+        env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
+
+        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &user, &amount);
+        Ok(())
+    }
+
+    pub fn get_margin_balance(env: Env, user: Address) -> i128 {
+        if env.storage().persistent().has(&DataKey::MarginBalance(user.clone())) {
+            env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
+        }
+        env.storage().persistent().get(&DataKey::MarginBalance(user)).unwrap_or(0)
     }
 
     /// Dynamic Skew-Math Engine
@@ -107,54 +215,130 @@ impl SmartMarginContract {
     }
 
     pub fn get_pool_state(env: Env, user: Address) -> (i128, i128, i128) {
-        let total_pool = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        let total_pool = Self::get_aum(&env);
         let total_shares = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
         let user_shares = env.storage().persistent().get(&DataKey::LpBalance(user)).unwrap_or(0);
         (total_pool, total_shares, user_shares)
+    }
+
+    pub fn update_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), Error> {
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Ok(())
+    }
+
+    pub fn update_oracle(env: Env, admin: Address, new_oracle: Address) -> Result<(), Error> {
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::OracleAddress, &new_oracle);
+        Ok(())
+    }
+
+    pub fn add_supported_token(env: Env, admin: Address, token: Address, symbol: Symbol) -> Result<(), Error> {
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+        
+        env.storage().instance().set(&DataKey::SupportedTokenSymbol(token.clone()), &symbol);
+        
+        let mut tokens: soroban_sdk::Vec<Address> = env.storage().instance().get(&DataKey::SupportedTokensArray).unwrap_or(soroban_sdk::Vec::new(&env));
+        if !tokens.contains(&token) {
+            tokens.push_back(token);
+            env.storage().instance().set(&DataKey::SupportedTokensArray, &tokens);
+        }
+        Ok(())
+    }
+
+    pub fn get_aum(env: &Env) -> i128 {
+        let tokens: soroban_sdk::Vec<Address> = env.storage().instance().get(&DataKey::SupportedTokensArray).unwrap_or(soroban_sdk::Vec::new(env));
+        let mut total_aum = 0;
+        
+        let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        
+        for token in tokens.iter() {
+            let balance: i128 = env.storage().instance().get(&DataKey::PoolBalance(token.clone())).unwrap_or(0);
+            if balance > 0 {
+                let symbol: Symbol = env.storage().instance().get(&DataKey::SupportedTokenSymbol(token.clone())).unwrap();
+                let price: i128 = env.invoke_contract(
+                    &oracle_addr,
+                    &Symbol::new(env, "get_price"),
+                    soroban_sdk::vec![env, symbol.into_val(env)]
+                );
+                // balance and price both scaled by 10^7. So (balance * price) / 10^7
+                total_aum += (balance * price) / 10_000_000;
+            }
+        }
+        total_aum
     }
 
     pub fn get_funding_rate(env: Env) -> i128 {
         env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0)
     }
 
-    pub fn add_liquidity(env: Env, lp: Address, amount: i128) -> Result<i128, Error> {
+    pub fn add_liquidity(env: Env, lp: Address, token_address: Address, amount: i128) -> Result<i128, Error> {
         lp.require_auth();
         if amount <= 0 {
             return Err(Error::InvalidMargin);
         }
 
-        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
-        let token_client = token::Client::new(&env, &token_addr);
+        // Verify token is supported
+        let tokens: soroban_sdk::Vec<Address> = env.storage().instance().get(&DataKey::SupportedTokensArray).unwrap_or(soroban_sdk::Vec::new(&env));
+        if !tokens.contains(&token_address) {
+            return Err(Error::Unauthorized); // Or InvalidOrder
+        }
+
+        // Transfer token to pool
+        let token_client = token::Client::new(&env, &token_address);
         token_client.transfer(&lp, &env.current_contract_address(), &amount);
 
+        // Get oracle price to calculate deposit USD value
+        let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        let symbol: Symbol = env.storage().instance().get(&DataKey::SupportedTokenSymbol(token_address.clone())).unwrap();
+        let price: i128 = env.invoke_contract(
+            &oracle_addr,
+            &Symbol::new(&env, "get_price"),
+            soroban_sdk::vec![&env, symbol.into_val(&env)]
+        );
+        
+        let deposit_usd_value = (amount * price) / 10_000_000;
+
         let mut total_shares: i128 = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
-        let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        let total_usdc = Self::get_aum(&env); // This represents the total AUM
 
         let shares_to_mint = if total_shares == 0 || total_usdc == 0 {
-            amount
+            deposit_usd_value
         } else {
-            (amount * total_shares) / total_usdc
+            (deposit_usd_value * total_shares) / total_usdc
         };
 
-        // Protect against inflation attack: never mint 0 shares
         if shares_to_mint <= 0 {
             return Err(Error::ZeroSharesMinted);
         }
 
         total_shares += shares_to_mint;
-        total_usdc += amount;
-
         env.storage().instance().set(&DataKey::TotalShares, &total_shares);
-        env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
 
         let mut lp_bal: i128 = env.storage().persistent().get(&DataKey::LpBalance(lp.clone())).unwrap_or(0);
         lp_bal += shares_to_mint;
         env.storage().persistent().set(&DataKey::LpBalance(lp), &lp_bal);
 
+        let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_address.clone())).unwrap_or(0);
+        pool_bal += amount;
+        env.storage().instance().set(&DataKey::PoolBalance(token_address), &pool_bal);
+
         Ok(shares_to_mint)
     }
 
-    pub fn remove_liquidity(env: Env, lp: Address, shares: i128) -> Result<i128, Error> {
+    pub fn remove_liquidity(env: Env, lp: Address, token_address: Address, shares: i128) -> Result<i128, Error> {
         lp.require_auth();
         if shares <= 0 {
             return Err(Error::InvalidMargin);
@@ -166,34 +350,54 @@ impl SmartMarginContract {
         }
 
         let mut total_shares: i128 = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
-        let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        let total_aum = Self::get_aum(&env);
+        if total_shares <= 0 || total_aum <= 0 {
+            return Err(Error::ZeroSharesMinted);
+        }
 
-        let usdc_to_return = (shares * total_usdc) / total_shares;
-        let payout = usdc_to_return;
+        let usd_value_to_return = (shares * total_aum) / total_shares;
+        
+        let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).unwrap();
+        let symbol: Symbol = env.storage().instance().get(&DataKey::SupportedTokenSymbol(token_address.clone())).unwrap();
+        let price: i128 = env.invoke_contract(
+            &oracle_addr,
+            &Symbol::new(&env, "get_price"),
+            soroban_sdk::vec![&env, symbol.into_val(&env)]
+        );
+        
+        if price <= 0 {
+            return Err(Error::InvalidMargin);
+        }
+        
+        let tokens_to_return = (usd_value_to_return * 10_000_000) / price;
 
-        // LP Lockup: Remaining Pool USDC must be >= Total OI / 5
+        let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_address.clone())).unwrap_or(0);
+        if tokens_to_return > pool_bal {
+            return Err(Error::InsufficientLiquidity);
+        }
+
+        // LP Lockup check based on total AUM
         let total_long_oi: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
         let total_short_oi: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
         let total_oi = total_long_oi + total_short_oi;
         
-        let remaining_usdc = total_usdc - payout;
-        if total_oi > remaining_usdc * 5 {
-            return Err(Error::InsufficientLiquidity); // Cannot withdraw, liquidity is backing active trades
+        let remaining_aum = total_aum - usd_value_to_return;
+        if total_oi > remaining_aum * 5 {
+            return Err(Error::InsufficientLiquidity); 
         }
 
         total_shares -= shares;
-        total_usdc -= usdc_to_return;
         lp_bal -= shares;
+        pool_bal -= tokens_to_return;
 
         env.storage().instance().set(&DataKey::TotalShares, &total_shares);
-        env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
         env.storage().persistent().set(&DataKey::LpBalance(lp.clone()), &lp_bal);
+        env.storage().instance().set(&DataKey::PoolBalance(token_address.clone()), &pool_bal);
 
-        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
-        let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&env.current_contract_address(), &lp, &usdc_to_return);
+        let token_client = token::Client::new(&env, &token_address);
+        token_client.transfer(&env.current_contract_address(), &lp, &tokens_to_return);
 
-        Ok(usdc_to_return)
+        Ok(tokens_to_return)
     }
 
     fn fetch_price(env: &Env) -> Result<i128, Error> {
@@ -209,8 +413,8 @@ impl SmartMarginContract {
         Ok(price)
     }
 
-    pub fn open_position(env: Env, user: Address, margin: i128, leverage: u32, is_long: bool, take_profit: i128, stop_loss: i128) -> Result<(), Error> {
-        user.require_auth();
+    pub fn open_position(env: Env, caller: Address, user: Address, margin: i128, leverage: u32, is_long: bool, take_profit: i128, stop_loss: i128, trailing_stop_distance: i128) -> Result<(), Error> {
+        Self::verify_caller(&env, &user, &caller)?;
         
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
         let entry_price = Self::fetch_price(&env)?;
@@ -233,33 +437,48 @@ impl SmartMarginContract {
         }
 
         let position_size = margin * (leverage as i128);
-
-        // Max OI Cap: Total OI + new position cannot exceed 5x Total Pool USDC
-        let total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
+        let open_fee = position_size / 1000; // 0.1% fee
+        
+        // Max OI Cap: Total OI + new position cannot exceed 5x Total Pool AUM
+        let total_aum = Self::get_aum(&env);
         let total_long_oi: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
         let total_short_oi: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
         
         let total_oi = total_long_oi + total_short_oi + position_size;
-        if total_oi > total_usdc * 5 {
+        if total_oi > total_aum * 5 {
             return Err(Error::InsufficientLiquidity);
         }
 
         Self::update_funding(&env);
         let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
 
-        let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(&user, &env.current_contract_address(), &margin);
+        let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+        if bal < margin {
+            return Err(Error::InvalidMargin);
+        }
+        
+        // In Cross-Margin, we do NOT lock the margin. We only deduct the opening fee.
+        bal -= open_fee;
+        env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &bal);
+        env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
+
+        // Add fee to the pool balance for Auto-Compounding
+        let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
+        pool_bal += open_fee;
+        env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
 
         let position = Position {
-            margin,
+            margin, // Conceptually the "initial margin required"
             leverage,
             entry_price,
             is_long,
             take_profit,
             stop_loss,
             funding_index_at_entry: current_funding,
+            trailing_stop_distance,
         };
-        env.storage().persistent().set(&DataKey::Position(user), &position);
+        env.storage().persistent().set(&DataKey::Position(user.clone()), &position);
+        env.storage().persistent().extend_ttl(&DataKey::Position(user), 10_000, 100_000);
 
         let mut total_volume: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
         total_volume += position_size;
@@ -278,78 +497,261 @@ impl SmartMarginContract {
         Ok(())
     }
 
-    pub fn close_position(env: Env, user: Address) -> Result<i128, Error> {
-        user.require_auth();
-        let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
-        let current_price = Self::fetch_price(&env)?;
-        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
+    pub fn place_limit_order(env: Env, caller: Address, user: Address, margin: i128, leverage: u32, is_long: bool, trigger_price: i128, take_profit: i128, stop_loss: i128, trailing_stop_distance: i128) -> Result<(), Error> {
+        Self::verify_caller(&env, &user, &caller)?;
+        if margin <= 0 || leverage < 1 {
+            return Err(Error::InvalidMargin);
+        }
         
-        Self::update_funding(&env);
+        let bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+        if bal < margin {
+            return Err(Error::InvalidMargin);
+        }
+        // Do not deduct for limit order, it will be checked upon execution.
+
+        let order = Order {
+            margin,
+            leverage,
+            is_long,
+            trigger_price,
+            take_profit,
+            stop_loss,
+            trailing_stop_distance,
+        };
+
+        let mut orders: soroban_sdk::Vec<Order> = env.storage().persistent().get(&DataKey::LimitOrders(user.clone())).unwrap_or(soroban_sdk::Vec::new(&env));
+        orders.push_back(order);
+        env.storage().persistent().set(&DataKey::LimitOrders(user.clone()), &orders);
+        env.storage().persistent().extend_ttl(&DataKey::LimitOrders(user), 10_000, 100_000);
+        
+        Ok(())
+    }
+
+    pub fn execute_limit_orders(env: Env, user: Address) -> Result<u32, Error> {
+        let orders: soroban_sdk::Vec<Order> = env.storage().persistent().get(&DataKey::LimitOrders(user.clone())).unwrap_or(soroban_sdk::Vec::new(&env));
+        if orders.is_empty() {
+            return Ok(0);
+        }
+        
+        let current_price = Self::fetch_price(&env)?;
+        let mut executed_count = 0;
+        let mut remaining_orders = soroban_sdk::Vec::new(&env);
+        
+        for order in orders.iter() {
+            let mut triggered = false;
+            if order.is_long && current_price <= order.trigger_price {
+                triggered = true;
+            } else if !order.is_long && current_price >= order.trigger_price {
+                triggered = true;
+            }
+            
+            if triggered && !env.storage().persistent().has(&DataKey::Position(user.clone())) {
+                // Execute by using the margin that was already locked during place_limit_order
+                
+                // This simulates the user calling open_position. In a real contract, user.require_auth() inside open_position 
+                // would fail here because the keeper invoked it. To fix this for the demo without massive refactoring, 
+                // we bypass auth for executed orders by duplicating the core logic.
+                
+                let position_size = order.margin * (order.leverage as i128);
+                let open_fee = position_size / 1000; // 0.1% fee — consistent with open_position
+                
+                let total_aum = Self::get_aum(&env);
+                let total_long_oi: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+                let total_short_oi: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+                
+                let total_oi = total_long_oi + total_short_oi + position_size;
+                if total_oi <= total_aum * 5 {
+                    // C3 FIX: Deduct opening fee from user's margin balance
+                    let mut user_bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+                    if user_bal < open_fee {
+                        remaining_orders.push_back(order); // Insufficient balance for fee
+                        continue;
+                    }
+                    user_bal -= open_fee;
+                    env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &user_bal);
+
+                    Self::update_funding(&env);
+                    let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
+                    let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+                    
+                    // Add fee to pool balance
+                    let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
+                    pool_bal += open_fee;
+                    env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
+                    
+                    let position = Position {
+                        margin: order.margin, // Use full margin (fee comes from balance, not margin)
+                        leverage: order.leverage,
+                        entry_price: current_price,
+                        is_long: order.is_long,
+                        take_profit: order.take_profit,
+                        stop_loss: order.stop_loss,
+                        funding_index_at_entry: current_funding,
+                        trailing_stop_distance: order.trailing_stop_distance,
+                    };
+                    env.storage().persistent().set(&DataKey::Position(user.clone()), &position);
+                    
+                    let mut total_volume: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+                    total_volume += position_size;
+                    env.storage().instance().set(&DataKey::TotalVolume, &total_volume);
+                    
+                    if order.is_long {
+                        let mut total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+                        total_long += position_size;
+                        env.storage().instance().set(&DataKey::TotalLongOI, &total_long);
+                    } else {
+                        let mut total_short: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+                        total_short += position_size;
+                        env.storage().instance().set(&DataKey::TotalShortOI, &total_short);
+                    }
+                    executed_count += 1;
+                } else {
+                    remaining_orders.push_back(order); // Failed to execute due to liquidity, keep it
+                }
+            } else {
+                remaining_orders.push_back(order);
+            }
+        }
+        
+        env.storage().persistent().set(&DataKey::LimitOrders(user), &remaining_orders);
+        Ok(executed_count)
+    }
+
+    pub fn update_trailing_stop(env: Env, user: Address) -> Result<(), Error> {
+        let mut position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
+        if position.trailing_stop_distance <= 0 {
+            return Ok(());
+        }
+        
+        let current_price = Self::fetch_price(&env)?;
+        let mut updated = false;
+        
+        if position.is_long {
+            let new_sl = current_price - position.trailing_stop_distance;
+            if new_sl > position.stop_loss {
+                position.stop_loss = new_sl;
+                updated = true;
+            }
+        } else {
+            let new_sl = current_price + position.trailing_stop_distance;
+            if new_sl < position.stop_loss || position.stop_loss == 0 {
+                position.stop_loss = new_sl;
+                updated = true;
+            }
+        }
+        
+        if updated {
+            env.storage().persistent().set(&DataKey::Position(user), &position);
+        }
+        Ok(())
+    }
+
+    fn internal_close_position(env: &Env, user: &Address, margin_to_close: i128) -> Result<i128, Error> {
+        let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
+        if position.entry_price <= 0 {
+            return Err(Error::InvalidMargin);
+        }
+        let current_price = Self::fetch_price(env)?;
+        
+        Self::update_funding(env);
         let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
         
+        let mut actual_margin_to_close = margin_to_close;
+        if actual_margin_to_close <= 0 || actual_margin_to_close > position.margin {
+            actual_margin_to_close = position.margin;
+        }
+
         // PnL from Price Action
         let price_diff = if position.is_long {
             current_price - position.entry_price
         } else {
             position.entry_price - current_price
         };
-        let pnl = (price_diff * position.margin * (position.leverage as i128)) / position.entry_price;
+        let pnl = (price_diff * actual_margin_to_close * (position.leverage as i128)) / position.entry_price;
         
         // PnL from Funding Rates (scaled by position size)
-        let position_size = position.margin * (position.leverage as i128);
+        let position_size = actual_margin_to_close * (position.leverage as i128);
         let funding_diff = current_funding - position.funding_index_at_entry;
         let funding_pnl = if position.is_long {
-            -(funding_diff * position_size) / 10_000_000_000 // Longs pay when rate goes up
+            -(funding_diff * position_size) / 10_000_000_000
         } else {
-            (funding_diff * position_size) / 10_000_000_000  // Shorts earn when rate goes up
+            (funding_diff * position_size) / 10_000_000_000
         };
 
-        // Total Payout
-        let mut final_pnl = pnl + funding_pnl;
-        let mut payout = position.margin + final_pnl;
+        let close_fee = position_size / 1000; // 0.1% closing fee (in USDC value)
 
-        if payout < 0 {
-            payout = 0;
-            final_pnl = -position.margin;
+        let final_pnl = pnl + funding_pnl - close_fee;
+
+        let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+        bal += final_pnl;
+        if bal < 0 {
+            bal = 0; // Liquidated or negative balance absorbed by pool
         }
-
-        let mut total_usdc: i128 = env.storage().instance().get(&DataKey::TotalPoolUsdc).unwrap_or(0);
-        total_usdc -= final_pnl; 
+        env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &bal);
+        env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
         
-        if total_usdc < 0 {
-            payout = position.margin + (total_usdc + final_pnl); 
-            total_usdc = 0;
-        }
-
-        env.storage().instance().set(&DataKey::TotalPoolUsdc, &total_usdc);
-        env.storage().persistent().remove(&DataKey::Position(user.clone()));
-
-        // Remove from Open Interest
-        let position_size = position.margin * (position.leverage as i128);
-        if position.is_long {
-            let mut total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
-            total_long -= position_size;
-            env.storage().instance().set(&DataKey::TotalLongOI, &total_long);
+        // C2 FIX: Properly adjust pool balance — pool pays winning traders, absorbs losses
+        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
+        pool_bal -= final_pnl;
+        pool_bal += close_fee;
+        if pool_bal < 0 { pool_bal = 0; }
+        env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
+        
+        if actual_margin_to_close == position.margin {
+            env.storage().persistent().remove(&DataKey::Position(user.clone()));
         } else {
-            let mut total_short: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
-            total_short -= position_size;
-            env.storage().instance().set(&DataKey::TotalShortOI, &total_short);
+            let mut updated_pos = position.clone();
+            updated_pos.margin -= actual_margin_to_close;
+            env.storage().persistent().set(&DataKey::Position(user.clone()), &updated_pos);
+            env.storage().persistent().extend_ttl(&DataKey::Position(user.clone()), 10_000, 100_000);
         }
 
-        if payout > 0 {
-            let token_client = token::Client::new(&env, &token_addr);
-            token_client.transfer(&env.current_contract_address(), &user, &payout);
+        // M2 FIX: Use saturating_sub to prevent Open Interest underflow corruption
+        if position.is_long {
+            let total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
+            let updated_long = total_long.saturating_sub(position_size);
+            env.storage().instance().set(&DataKey::TotalLongOI, &updated_long);
+        } else {
+            let total_short: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
+            let updated_short = total_short.saturating_sub(position_size);
+            env.storage().instance().set(&DataKey::TotalShortOI, &updated_short);
         }
 
-        Ok(payout)
+        let mut total_pnl: i128 = env.storage().persistent().get(&DataKey::UserTotalPnL(user.clone())).unwrap_or(0);
+        total_pnl += final_pnl;
+        env.storage().persistent().set(&DataKey::UserTotalPnL(user.clone()), &total_pnl);
+        env.storage().persistent().extend_ttl(&DataKey::UserTotalPnL(user.clone()), 10_000, 100_000);
+        
+        // M15 FIX: Conditional leaderboard update
+        if final_pnl != 0 {
+            Self::update_leaderboard(env, user.clone(), total_pnl);
+        }
+
+        Ok(final_pnl)
     }
 
-    pub fn trigger_orders(env: Env, user: Address) -> Result<i128, Error> {
-        let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
+    pub fn close_position(env: Env, caller: Address, user: Address, margin_to_close: i128) -> Result<i128, Error> {
+        Self::verify_caller(&env, &user, &caller)?;
+        Self::internal_close_position(&env, &user, margin_to_close)
+    }
+
+    pub fn trigger_orders(env: Env, caller: Address, user: Address) -> Result<i128, Error> {
+        let executed_limits = Self::execute_limit_orders(env.clone(), user.clone())?;
+        
+        let position_opt: Option<Position> = env.storage().persistent().get(&DataKey::Position(user.clone()));
+        if position_opt.is_none() {
+            if executed_limits > 0 {
+                return Ok(executed_limits as i128);
+            }
+            return Err(Error::NoPosition);
+        }
+        let position = position_opt.unwrap();
         let current_price = Self::fetch_price(&env)?;
         
         let mut should_trigger = false;
         
+        // 1. TP / SL Checks
         if position.is_long {
             if position.take_profit > 0 && current_price >= position.take_profit { should_trigger = true; }
             if position.stop_loss > 0 && current_price <= position.stop_loss { should_trigger = true; }
@@ -358,15 +760,96 @@ impl SmartMarginContract {
             if position.stop_loss > 0 && current_price >= position.stop_loss { should_trigger = true; }
         }
 
+        // 2. Global Cross-Margin Liquidation Check
+        if !should_trigger {
+            let price_diff = if position.is_long {
+                current_price - position.entry_price
+            } else {
+                position.entry_price - current_price
+            };
+            let pnl = (price_diff * position.margin * (position.leverage as i128)) / position.entry_price;
+            
+            let position_size = position.margin * (position.leverage as i128);
+            
+            Self::update_funding(&env);
+            let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
+            let funding_diff = current_funding - position.funding_index_at_entry;
+            let funding_pnl = if position.is_long {
+                -(funding_diff * position_size) / 10_000_000_000
+            } else {
+                (funding_diff * position_size) / 10_000_000_000
+            };
+
+            let unrealized_pnl = pnl + funding_pnl;
+            let bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+            let account_equity = bal + unrealized_pnl;
+            
+            // Maintenance Margin = 2% of Position Size
+            let maintenance_margin = position_size * 2 / 100;
+            
+            if account_equity < maintenance_margin {
+                should_trigger = true;
+            }
+        }
+
         if should_trigger {
-            return Self::close_position(env, user);
+            caller.require_auth(); // H1 FIX: Keeper/liquidator authorizes transaction, user auth bypassed!
+            return Self::internal_close_position(&env, &user, position.margin);
         }
         
+        if executed_limits > 0 {
+            return Ok(executed_limits as i128);
+        }
+
         Err(Error::OrderNotTriggered)
     }
 
     pub fn get_position(env: Env, user: Address) -> Result<Position, Error> {
         env.storage().persistent().get(&DataKey::Position(user)).ok_or(Error::NoPosition)
+    }
+
+    pub fn get_limit_orders(env: Env, user: Address) -> soroban_sdk::Vec<Order> {
+        env.storage().persistent().get(&DataKey::LimitOrders(user)).unwrap_or(soroban_sdk::Vec::new(&env))
+    }
+
+    pub fn get_leaderboard(env: Env) -> soroban_sdk::Vec<LeaderboardEntry> {
+        env.storage().persistent().get(&DataKey::GlobalLeaderboard).unwrap_or(soroban_sdk::Vec::new(&env))
+    }
+
+    pub fn get_user_pnl(env: Env, user: Address) -> i128 {
+        env.storage().persistent().get(&DataKey::UserTotalPnL(user)).unwrap_or(0)
+    }
+
+    fn update_leaderboard(env: &Env, user: Address, total_pnl: i128) {
+        let mut board: soroban_sdk::Vec<LeaderboardEntry> = env.storage().persistent().get(&DataKey::GlobalLeaderboard).unwrap_or(soroban_sdk::Vec::new(env));
+        
+        let mut user_idx = None;
+        for i in 0..board.len() {
+            if board.get(i).unwrap().user == user {
+                user_idx = Some(i);
+                break;
+            }
+        }
+        if let Some(idx) = user_idx {
+            board.remove(idx);
+        }
+        
+        let mut insert_idx = board.len();
+        for i in 0..board.len() {
+            if total_pnl > board.get(i).unwrap().total_pnl {
+                insert_idx = i;
+                break;
+            }
+        }
+        
+        board.insert(insert_idx, LeaderboardEntry { user, total_pnl });
+        
+        if board.len() > 10 {
+            board.pop_back();
+        }
+        
+        env.storage().persistent().set(&DataKey::GlobalLeaderboard, &board);
+        env.storage().persistent().extend_ttl(&DataKey::GlobalLeaderboard, 10_000, 100_000);
     }
 }
 

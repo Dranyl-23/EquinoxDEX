@@ -27,6 +27,12 @@ export default function Navbar() {
           >
             Portfolio
           </Link>
+          <Link 
+            href="/leaderboard" 
+            className={`hover:text-brand transition-colors flex items-center gap-1 ${pathname === '/leaderboard' ? 'text-brand font-bold' : ''}`}
+          >
+            <span className="text-amber-500">🏆</span> Leaderboard
+          </Link>
         </nav>
       </div>
       <div className="flex items-center gap-4">

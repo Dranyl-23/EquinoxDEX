@@ -17,6 +17,12 @@ export const server = new rpc.Server(RPC_URL);
 export const XLM = Asset.native();
 export const USDC = USDC_ISSUER ? new Asset('USDC', USDC_ISSUER) : null;
 
+// Testnet SAC (Stellar Asset Contract) addresses
+// USDC: Circle-issued USDC on Stellar testnet
+export const USDC_TOKEN_ID = 'CBIELTK6YBZJU67VBKDS5V2P4IZZWVE7LOOK4RQHBQWUDT5DSSZLV6OJ';
+// XLM: Native asset SAC on Stellar testnet
+export const XLM_TOKEN_ID = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+
 /** Fund a testnet account via Friendbot (~10,000 XLM). */
 export async function fundTestnetAccount(publicKey: string): Promise<void> {
   const res = await fetch(

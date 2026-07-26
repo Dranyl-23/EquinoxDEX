@@ -24,10 +24,11 @@ export default function ConnectWallet({
         <button
           onClick={copy}
           title="Copy full address"
-          className="rounded bg-gray-100 px-3 py-1 font-mono text-sm text-gray-700 transition-colors hover:bg-gray-200"
+          className="rounded bg-panel hover:bg-border text-white border border-border/50 px-3 py-1 font-mono text-sm transition-colors"
         >
           {copied ? 'Copied!' : `${publicKey.slice(0, 6)}…${publicKey.slice(-6)}`}
         </button>
+
         <button
           onClick={disconnect}
           className="text-sm text-red-500 hover:underline"

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/components/WalletProvider";
 import Navbar from "@/components/Navbar";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SmartMargin | Decentralized Perps",
-  description: "Institutional Trading Logic. Decentralized Wallet Security.",
+  title: "EquinoxDEX | Next-Gen Cross-Margin Perpetual DEX",
+  description: "Institutional Trading Engine on Stellar Soroban. Ephemeral 1-Click Trading & Cross-Margin Architecture.",
 };
 
 export default function RootLayout({

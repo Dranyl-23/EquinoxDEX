@@ -1,9 +1,8 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useSyncExternalStore } from 'react';
 
 const TIMEOUT_MS = 3000;
 
-// Freighter API calls can hang if the extension is missing — race them with a timeout.
 function withTimeout<T>(p: Promise<T>, fallback: T, ms = TIMEOUT_MS): Promise<T> {
   return Promise.race([
     p,
@@ -19,55 +18,68 @@ export interface WalletState {
   disconnect: () => void;
 }
 
+// React 18/19 idiom for subscribing to localStorage without SSR hydration mismatch or ESLint warnings
+const emptySubscribe = (callback: () => void) => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', callback);
+    return () => window.removeEventListener('storage', callback);
+  }
+  return () => {};
+};
+
+const getSnapshot = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('freighterPublicKey');
+  }
+  return null;
+};
+
+const getServerSnapshot = () => null;
+
 export function useWallet(): WalletState {
-  const [publicKey, setPublicKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Rehydrate wallet state from local storage on mount
-    const saved = localStorage.getItem('freighterPublicKey');
-    if (saved) {
-      setPublicKey(saved);
-    }
-  }, []);
+  const publicKey = useSyncExternalStore(emptySubscribe, getSnapshot, getServerSnapshot);
 
   const connect = useCallback(async () => {
     setConnecting(true);
     setError(null);
     try {
-      // Dynamic import only — a static import breaks SSR (browser globals).
       const freighter = await import('@stellar/freighter-api');
 
       const connected = await withTimeout(freighter.isConnected(), {
         isConnected: false,
       });
+
       if (!connected.isConnected) {
-        throw new Error(
-          'Freighter not detected. Install it from freighter.app and reload.',
-        );
+        setError('Freighter wallet extension is not installed.');
+        return;
       }
 
-      // requestAccess() prompts the user and returns their address (Freighter v6).
-      const access = await freighter.requestAccess();
-      if (access.error) throw new Error(access.error);
-      if (!access.address) {
-        throw new Error('No address returned — did you approve the request?');
-      }
+      const res = await withTimeout(
+        freighter.getAddress(),
+        { address: '', error: '' }
+      );
 
-      setPublicKey(access.address);
-      localStorage.setItem('freighterPublicKey', access.address);
+      const address = typeof res === 'string' ? res : res?.address;
+
+      if (address) {
+        localStorage.setItem('freighterPublicKey', address);
+        window.dispatchEvent(new Event('storage'));
+      } else {
+        setError('Failed to fetch public key from Freighter.');
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to connect wallet');
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setConnecting(false);
     }
   }, []);
 
   const disconnect = useCallback(() => {
-    setPublicKey(null);
-    setError(null);
     localStorage.removeItem('freighterPublicKey');
+    window.dispatchEvent(new Event('storage'));
   }, []);
 
   return { publicKey, connecting, error, connect, disconnect };

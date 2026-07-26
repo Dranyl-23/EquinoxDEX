@@ -4,6 +4,7 @@ import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
 import { readPoolState, buildAddLiquidityXDR, buildRemoveLiquidityXDR, contractConfigured } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
+import { USDC_TOKEN_ID, XLM_TOKEN_ID } from '@/lib/stellar';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 
 export default function Portfolio() {
@@ -13,9 +14,11 @@ export default function Portfolio() {
   const [balances, setBalances] = useState<Balances | null>(null);
   const [poolState, setPoolState] = useState({ totalPool: 0, totalShares: 0, userShares: 0 });
   
+  const [selectedAsset, setSelectedAsset] = useState<'USDC' | 'XLM'>('USDC');
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'deposit' | 'withdraw' | null>(null);
 
   // Poll for balances and pool state
   useEffect(() => {
@@ -41,8 +44,10 @@ export default function Portfolio() {
     if (!publicKey || !depositAmount) return;
     setIsSubmitting(true);
     try {
+      setPendingAction('deposit');
       const scaledAmount = parseFloat(depositAmount) * DECIMALS;
-      const xdr = await buildAddLiquidityXDR(publicKey, scaledAmount);
+      const tokenAddress = selectedAsset === 'USDC' ? USDC_TOKEN_ID : XLM_TOKEN_ID;
+      const xdr = await buildAddLiquidityXDR(publicKey, tokenAddress, scaledAmount);
       await signAndSubmit(xdr, publicKey);
       setDepositAmount('');
       
@@ -50,8 +55,10 @@ export default function Portfolio() {
       setBalances(bal);
       const state = await readPoolState(publicKey);
       setPoolState(state);
+      setPendingAction(null);
       alert('Deposit successful!');
     } catch (e: unknown) {
+      setPendingAction(null);
       alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsSubmitting(false);
@@ -62,6 +69,7 @@ export default function Portfolio() {
     if (!publicKey || !withdrawAmount) return;
     setIsSubmitting(true);
     try {
+      setPendingAction('withdraw');
       // Calculate how many shares they are trying to withdraw based on USDC input
       // USDC = (shares * totalPool) / totalShares  =>  shares = (USDC * totalShares) / totalPool
       const usdcScaled = parseFloat(withdrawAmount) * DECIMALS;
@@ -71,7 +79,8 @@ export default function Portfolio() {
         sharesToWithdraw = (usdcScaled * poolState.totalShares) / poolState.totalPool;
       }
       
-      const xdr = await buildRemoveLiquidityXDR(publicKey, sharesToWithdraw);
+      const tokenAddress = selectedAsset === 'USDC' ? USDC_TOKEN_ID : XLM_TOKEN_ID;
+      const xdr = await buildRemoveLiquidityXDR(publicKey, tokenAddress, sharesToWithdraw);
       await signAndSubmit(xdr, publicKey);
       setWithdrawAmount('');
       
@@ -79,8 +88,10 @@ export default function Portfolio() {
       setBalances(bal);
       const state = await readPoolState(publicKey);
       setPoolState(state);
+      setPendingAction(null);
       alert('Withdrawal successful!');
     } catch (e: unknown) {
+      setPendingAction(null);
       alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsSubmitting(false);
@@ -103,7 +114,7 @@ export default function Portfolio() {
   return (
     <main className="flex min-h-screen w-full flex-col bg-background">
       {/* Main Portfolio Content */}
-      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-[1600px] mx-auto w-full">
+      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-400 mx-auto w-full">
         
         {/* Header Section */}
         <div className="mb-8 flex flex-col gap-2">
@@ -115,7 +126,7 @@ export default function Portfolio() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">Total Value Locked (TVL)</div>
-            <div className="text-2xl font-mono font-bold text-white">${tvl.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+            <div className="text-2xl font-mono font-bold text-white">${tvl.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USD</span></div>
           </div>
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">Estimated APR</div>
@@ -163,12 +174,12 @@ export default function Portfolio() {
                     </div>
                     <div className="flex justify-between items-center text-sm border-b border-border/50 pb-2">
                       <span className="text-muted">LP Tokens Owned</span>
-                      <span className="font-mono text-white">{(poolState.userShares / 10000000).toFixed(4)}</span>
+                      <span className="font-mono text-white">{(poolState.userShares / DECIMALS).toFixed(4)}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted">Current Share Price</span>
                       <span className="font-mono text-white">
-                        ${poolState.totalShares > 0 ? (tvl / (poolState.totalShares / 10000000)).toFixed(4) : '1.0000'}
+                        ${poolState.totalShares > 0 ? (tvl / (poolState.totalShares / DECIMALS)).toFixed(4) : '1.0000'}
                       </span>
                     </div>
                   </div>
@@ -216,8 +227,26 @@ export default function Portfolio() {
                 <div className="flex flex-col gap-6">
                   <div className="flex flex-col gap-2">
                     <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted">Asset</span>
+                    </div>
+                    <div className="flex gap-2 mb-2">
+                      <button 
+                        onClick={() => setSelectedAsset('USDC')}
+                        className={`flex-1 py-2 rounded border text-sm font-semibold transition-colors ${selectedAsset === 'USDC' ? 'bg-brand/20 border-brand text-brand' : 'border-border text-muted hover:border-brand/50'}`}
+                      >
+                        USDC
+                      </button>
+                      <button 
+                        onClick={() => setSelectedAsset('XLM')}
+                        className={`flex-1 py-2 rounded border text-sm font-semibold transition-colors ${selectedAsset === 'XLM' ? 'bg-brand/20 border-brand text-brand' : 'border-border text-muted hover:border-brand/50'}`}
+                      >
+                        XLM
+                      </button>
+                    </div>
+
+                    <div className="flex justify-between text-xs mb-1">
                       <span className="text-muted">Amount to Deposit</span>
-                      <span className="text-muted">Balance: <span className="text-white font-mono">{balances ? balances.usdc : '0.00'}</span></span>
+                      <span className="text-muted">Balance: <span className="text-white font-mono">{balances ? balances[selectedAsset.toLowerCase() as keyof typeof balances] : '0.00'}</span></span>
                     </div>
                     <div className="relative">
                       <input 
@@ -227,7 +256,7 @@ export default function Portfolio() {
                         onChange={(e) => setDepositAmount(e.target.value)}
                         className="w-full bg-background border border-border rounded px-4 py-3 text-lg text-white outline-none focus:border-brand transition-colors font-mono"
                       />
-                      <span className="absolute right-4 top-3.5 font-bold text-muted">USDC</span>
+                      <span className="absolute right-4 top-3.5 font-bold text-muted">{selectedAsset}</span>
                     </div>
                   </div>
                   
@@ -251,14 +280,32 @@ export default function Portfolio() {
                     disabled={!publicKey || !depositAmount || isSubmitting}
                     className="w-full bg-brand hover:bg-brand-hover text-white font-bold py-3.5 rounded transition-colors disabled:opacity-50 mt-2"
                   >
-                    {isSubmitting ? 'Processing...' : !publicKey ? 'Connect Wallet' : 'Deposit USDC'}
+                    {pendingAction === 'deposit' ? 'Processing...' : !publicKey ? 'Connect Wallet' : `Deposit ${selectedAsset}`}
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-col gap-6">
                   <div className="flex flex-col gap-2">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted">Amount to Withdraw</span>
+                      <span className="text-muted">Asset to Receive</span>
+                    </div>
+                    <div className="flex gap-2 mb-2">
+                      <button 
+                        onClick={() => setSelectedAsset('USDC')}
+                        className={`flex-1 py-2 rounded border text-sm font-semibold transition-colors ${selectedAsset === 'USDC' ? 'bg-brand/20 border-brand text-brand' : 'border-border text-muted hover:border-brand/50'}`}
+                      >
+                        USDC
+                      </button>
+                      <button 
+                        onClick={() => setSelectedAsset('XLM')}
+                        className={`flex-1 py-2 rounded border text-sm font-semibold transition-colors ${selectedAsset === 'XLM' ? 'bg-brand/20 border-brand text-brand' : 'border-border text-muted hover:border-brand/50'}`}
+                      >
+                        XLM
+                      </button>
+                    </div>
+
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted">Amount to Withdraw (in USD value)</span>
                       <span className="text-muted">Max: <span className="text-white font-mono">{userStakedUsdc.toFixed(2)}</span></span>
                     </div>
                     <div className="relative">
@@ -269,7 +316,7 @@ export default function Portfolio() {
                         onChange={(e) => setWithdrawAmount(e.target.value)}
                         className="w-full bg-background border border-border rounded px-4 py-3 text-lg text-white outline-none focus:border-brand transition-colors font-mono"
                       />
-                      <span className="absolute right-4 top-3.5 font-bold text-muted">USDC</span>
+                      <span className="absolute right-4 top-3.5 font-bold text-muted">{selectedAsset} (USD)</span>
                     </div>
                   </div>
 
@@ -293,7 +340,7 @@ export default function Portfolio() {
                     disabled={!publicKey || !withdrawAmount || isSubmitting || userStakedUsdc <= 0}
                     className="w-full bg-brand hover:bg-brand-hover text-white font-bold py-3.5 rounded transition-colors disabled:opacity-50 mt-2"
                   >
-                    {isSubmitting ? 'Processing...' : !publicKey ? 'Connect Wallet' : 'Withdraw USDC'}
+                    {pendingAction === 'withdraw' ? 'Processing...' : !publicKey ? 'Connect Wallet' : `Withdraw ${selectedAsset}`}
                   </button>
                 </div>
               )}

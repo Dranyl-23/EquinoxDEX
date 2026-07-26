@@ -235,7 +235,7 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "open_position",
+              "function_name": "place_limit_order",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -258,13 +258,19 @@
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 660000000000
+                    "lo": 550000000000
                   }
                 },
                 {
                   "i128": {
                     "hi": 0,
-                    "lo": 540000000000
+                    "lo": 650000000000
+                  }
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 500000000000
                   }
                 },
                 {
@@ -281,28 +287,9 @@
       ]
     ],
     [],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "trigger_orders",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ]
+    [],
+    [],
+    []
   ],
   "ledger": {
     "protocol_version": 22,
@@ -613,7 +600,10 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "GlobalLeaderboard"
+                  "symbol": "LimitOrders"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 }
               ]
             },
@@ -630,37 +620,16 @@
                 "key": {
                   "vec": [
                     {
-                      "symbol": "GlobalLeaderboard"
+                      "symbol": "LimitOrders"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                     }
                   ]
                 },
                 "durability": "persistent",
                 "val": {
-                  "vec": [
-                    {
-                      "map": [
-                        {
-                          "key": {
-                            "symbol": "total_pnl"
-                          },
-                          "val": {
-                            "i128": {
-                              "hi": 0,
-                              "lo": 990000000
-                            }
-                          }
-                        },
-                        {
-                          "key": {
-                            "symbol": "user"
-                          },
-                          "val": {
-                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                          }
-                        }
-                      ]
-                    }
-                  ]
+                  "vec": []
                 }
               }
             },
@@ -755,7 +724,7 @@
                 "val": {
                   "i128": {
                     "hi": 0,
-                    "lo": 1980000000
+                    "lo": 990000000
                   }
                 }
               }
@@ -772,7 +741,7 @@
             "key": {
               "vec": [
                 {
-                  "symbol": "UserTotalPnL"
+                  "symbol": "Position"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -792,7 +761,7 @@
                 "key": {
                   "vec": [
                     {
-                      "symbol": "UserTotalPnL"
+                      "symbol": "Position"
                     },
                     {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
@@ -801,16 +770,96 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 990000000
-                  }
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "entry_price"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 540000000000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "funding_index_at_entry"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 0
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "is_long"
+                      },
+                      "val": {
+                        "bool": true
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "leverage"
+                      },
+                      "val": {
+                        "u32": 10
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "margin"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 1000000000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "stop_loss"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 500000000000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "take_profit"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 650000000000
+                        }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "trailing_stop_distance"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 0
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             },
             "ext": "v0"
           },
-          100000
+          4095
         ]
       ],
       [
@@ -901,7 +950,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 99030000000
+                            "lo": 100010000000
                           }
                         }
                       },
@@ -947,7 +996,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 0
+                            "lo": 10000000000
                           }
                         }
                       },
@@ -1048,7 +1097,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 660000000000
+                            "lo": 540000000000
                           }
                         }
                       },
@@ -1071,39 +1120,6 @@
             "ext": "v0"
           },
           4095
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 5806905060045992000
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 5806905060045992000
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
         ]
       ],
       [

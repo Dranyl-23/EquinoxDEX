@@ -2,24 +2,50 @@
 import { useState, useEffect } from 'react';
 import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
-import { readPosition, readMarketState, Position, buildOpenPositionXDR, buildClosePositionXDR, buildTriggerOrdersXDR, contractConfigured } from '@/lib/contract';
+import {
+  readPosition,
+  readMarketState,
+  readLimitOrders,
+  readMarginBalance,
+  Position,
+  Order,
+  buildOpenPositionXDR,
+  buildClosePositionXDR,
+  buildTriggerOrdersXDR,
+  buildPlaceLimitOrderXDR,
+  contractConfigured,
+  buildDepositMarginXDR,
+  buildWithdrawMarginXDR,
+  buildAddSessionKeyXDR,
+  buildFundSessionKeyXDR,
+} from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
+import { getSessionKey, generateSessionKey, clearSessionKey, hasActiveSessionKey } from '@/lib/sessionKey';
 import { TradingChart } from '@/components/TradingChart';
-import { MOCK_PRICE, DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
+import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
+import { useLivePrice } from '@/hooks/useLivePrice';
+import PnLShareCard from '@/components/PnLShareCard';
+
+// Modular Trading Components (H12 Refactor)
+import { MarketHeader } from '@/components/trading/MarketHeader';
+import { PositionsTable } from '@/components/trading/PositionsTable';
+import { OrderForm } from '@/components/trading/OrderForm';
 
 export default function Home() {
   const wallet = useWalletContext();
-  const { publicKey} = wallet;
-  const [leverage, setLeverage] = useState(10);
-  const [positionType, setPositionType] = useState<'Long' | 'Short'>('Long');
-  const [marginInput, setMarginInput] = useState('');
-  const [tpInput, setTpInput] = useState('');
-  const [slInput, setSlInput] = useState('');
-  
+  const { publicKey } = wallet;
+  const { price: livePrice, loading: priceLoading, error: priceError } = useLivePrice('BTCUSDT');
+  const currentPrice = livePrice || 0;
+
   const [balances, setBalances] = useState<Balances | null>(null);
+  const [marginBalance, setMarginBalance] = useState<number>(0);
   const [position, setPosition] = useState<Position | null>(null);
+  const [limitOrders, setLimitOrders] = useState<Order[]>([]);
+  const [pendingPosition, setPendingPosition] = useState<Position | null>(null);
   const [marketState, setMarketState] = useState({ long_oi: 0, short_oi: 0, global_funding: 0, total_volume: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [is1ClickEnabled, setIs1ClickEnabled] = useState(hasActiveSessionKey());
 
   // Poll for balances, position, and market state
   useEffect(() => {
@@ -28,8 +54,12 @@ export default function Home() {
       try {
         const bal = await fetchBalances(publicKey);
         setBalances(bal);
+        const mBal = await readMarginBalance(publicKey);
+        setMarginBalance(mBal);
         const pos = await readPosition(publicKey);
         setPosition(pos);
+        const orders = await readLimitOrders(publicKey);
+        setLimitOrders(orders);
         const state = await readMarketState();
         setMarketState(state);
       } catch (e) {
@@ -41,49 +71,91 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [publicKey]);
 
-  const handleOpenPosition = async () => {
-    if (!publicKey || !marginInput) return;
+  const handleOpenPosition = async (params: {
+    orderTab: 'Market' | 'Limit';
+    positionType: 'Long' | 'Short';
+    marginInput: string;
+    leverage: number;
+    triggerInput: string;
+    tpInput: string;
+    slInput: string;
+    trailingInput: string;
+  }) => {
+    if (!publicKey || !params.marginInput) return;
     setIsSubmitting(true);
     try {
-      const marginScaled = parseFloat(marginInput) * DECIMALS;
-      const tpScaled = tpInput ? parseFloat(tpInput) * DECIMALS : 0;
-      const slScaled = slInput ? parseFloat(slInput) * DECIMALS : 0;
-      
-      const isLong = positionType === 'Long';
-      const xdr = await buildOpenPositionXDR(publicKey, marginScaled, leverage, isLong, tpScaled, slScaled);
-      await signAndSubmit(xdr, publicKey);
-      
-      setMarginInput('');
-      setTpInput('');
-      setSlInput('');
-      
+      const marginScaled = parseFloat(params.marginInput) * DECIMALS;
+      const tpScaled = params.tpInput ? parseFloat(params.tpInput) * DECIMALS : 0;
+      const slScaled = params.slInput ? parseFloat(params.slInput) * DECIMALS : 0;
+      const trailingScaled = params.trailingInput ? parseFloat(params.trailingInput) * DECIMALS : 0;
+      const triggerScaled = params.triggerInput ? parseFloat(params.triggerInput) * DECIMALS : 0;
+      const isLong = params.positionType === 'Long';
+
+      const sessionKey = getSessionKey();
+      const caller = sessionKey ? sessionKey.publicKey : publicKey;
+
+      if (params.orderTab === 'Market') {
+        // Optimistic UI: Set pending position
+        setPendingPosition({
+          margin: marginScaled,
+          leverage: params.leverage,
+          entry_price: currentPrice * DECIMALS,
+          is_long: isLong,
+          take_profit: tpScaled,
+          stop_loss: slScaled,
+          funding_index_at_entry: marketState.global_funding,
+          trailing_stop_distance: trailingScaled,
+        });
+
+        const xdr = await buildOpenPositionXDR(caller, publicKey, marginScaled, params.leverage, isLong, tpScaled, slScaled, trailingScaled);
+        await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
+        setPendingPosition(null);
+      } else {
+        // Limit Order
+        const xdr = await buildPlaceLimitOrderXDR(caller, publicKey, marginScaled, params.leverage, isLong, triggerScaled, tpScaled, slScaled, trailingScaled);
+        await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
+      }
+
       // Fast refresh
       const pos = await readPosition(publicKey);
       setPosition(pos);
+      const orders = await readLimitOrders(publicKey);
+      setLimitOrders(orders);
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
-      
+      const mBal = await readMarginBalance(publicKey);
+      setMarginBalance(mBal);
     } catch (e: unknown) {
+      setPendingPosition(null);
       alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleClosePosition = async () => {
-    if (!publicKey) return;
+  const handleClosePosition = async (pct: number = 100) => {
+    if (!publicKey || !position) return;
     setIsSubmitting(true);
     try {
-      const xdr = await buildClosePositionXDR(publicKey);
-      await signAndSubmit(xdr, publicKey);
-      
+      const sessionKey = getSessionKey();
+      const caller = sessionKey ? sessionKey.publicKey : publicKey;
+      const marginToClose = (position.margin * pct) / 100;
+      const xdr = await buildClosePositionXDR(caller, publicKey, marginToClose);
+      await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
+
       // Fast refresh
-      setPosition(null);
+      if (pct === 100) {
+        setPosition(null);
+      } else {
+        const pos = await readPosition(publicKey);
+        setPosition(pos);
+      }
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
-      
+      const mBal = await readMarginBalance(publicKey);
+      setMarginBalance(mBal);
     } catch (e: unknown) {
-      alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      alert(`Close Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -95,11 +167,16 @@ export default function Home() {
     try {
       const xdr = await buildTriggerOrdersXDR(publicKey, publicKey);
       await signAndSubmit(xdr, publicKey);
-      
-      setPosition(null);
+
+      // H10 FIX: Fetch real state instead of blindly calling setPosition(null)
+      const updatedPos = await readPosition(publicKey);
+      setPosition(updatedPos);
+
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
-      alert('Keeper successfully triggered TP/SL! Position Closed.');
+      const mBal = await readMarginBalance(publicKey);
+      setMarginBalance(mBal);
+      alert('Keeper successfully triggered TP/SL or liquidation check!');
     } catch (e: unknown) {
       alert(`Keeper Trigger Failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -107,37 +184,93 @@ export default function Home() {
     }
   };
 
-  const marginVal = parseFloat(marginInput) || 0;
-  const sizeVal = marginVal * leverage;
-  const sizeInBtc = (sizeVal / MOCK_PRICE).toFixed(4);
-  
-  // Funding Skew Display Math
-  const skew = marketState.long_oi - marketState.short_oi;
-  const skewDisplay = (skew / DECIMALS).toLocaleString();
-  const isSkewLong = skew > 0;
-  const isSkewShort = skew < 0;
-  
+  const handleDeposit = async (amountStr: string) => {
+    if (!publicKey || !amountStr) return;
+    setIsSubmitting(true);
+    try {
+      const amtScaled = parseFloat(amountStr) * DECIMALS;
+      const xdr = await buildDepositMarginXDR(publicKey, amtScaled);
+      await signAndSubmit(xdr, publicKey);
+
+      const bal = await fetchBalances(publicKey);
+      setBalances(bal);
+      const mBal = await readMarginBalance(publicKey);
+      setMarginBalance(mBal);
+    } catch (e: unknown) {
+      alert(`Deposit Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleWithdraw = async (amountStr: string) => {
+    if (!publicKey || !amountStr) return;
+    setIsSubmitting(true);
+    try {
+      const amtScaled = parseFloat(amountStr) * DECIMALS;
+      // H4 FIX ALIGNMENT: Withdrawals require direct user authentication (publicKey), not session keys
+      const xdr = await buildWithdrawMarginXDR(publicKey, publicKey, amtScaled);
+      await signAndSubmit(xdr, publicKey);
+
+      const bal = await fetchBalances(publicKey);
+      setBalances(bal);
+      const mBal = await readMarginBalance(publicKey);
+      setMarginBalance(mBal);
+    } catch (e: unknown) {
+      alert(`Withdraw Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleToggle1Click = async () => {
+    if (!publicKey) return;
+    if (is1ClickEnabled) {
+      clearSessionKey();
+      setIs1ClickEnabled(false);
+    } else {
+      setIsSubmitting(true);
+      try {
+        const session = generateSessionKey();
+        try {
+          const fundXdr = await buildFundSessionKeyXDR(publicKey, session.publicKey);
+          await signAndSubmit(fundXdr, publicKey, true);
+        } catch {
+          // Ignore if account exists
+        }
+        const xdr = await buildAddSessionKeyXDR(publicKey, session.publicKey);
+        await signAndSubmit(xdr, publicKey, true);
+        setIs1ClickEnabled(true);
+      } catch (e: unknown) {
+        clearSessionKey();
+        alert(`Failed to enable 1-Click Trading: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
   // PnL Calc for active position
   let pnl = 0;
   let pnlPercent = 0;
   let fundingPnl = 0;
-  
+
   if (position) {
     const rawMargin = position.margin / DECIMALS;
     const rawEntry = position.entry_price / DECIMALS;
-    const priceDiff = position.is_long ? MOCK_PRICE - rawEntry : rawEntry - MOCK_PRICE;
+    const priceDiff = position.is_long ? currentPrice - rawEntry : rawEntry - currentPrice;
     const pricePnl = (priceDiff * rawMargin * position.leverage) / rawEntry;
-    
-    // Funding Rate PnL (scaled by position size, matching contract math)
+
+    // Funding Rate PnL
     const rawCurrentFunding = marketState.global_funding / DECIMALS;
     const rawEntryFunding = position.funding_index_at_entry / DECIMALS;
     const fundingDiff = rawCurrentFunding - rawEntryFunding;
     const positionSize = rawMargin * position.leverage;
-    
-    fundingPnl = position.is_long 
-      ? -(fundingDiff * positionSize) / 1000 
+
+    fundingPnl = position.is_long
+      ? -(fundingDiff * positionSize) / 1000
       : (fundingDiff * positionSize) / 1000;
-    
+
     pnl = pricePnl + fundingPnl;
     pnlPercent = (pnl / rawMargin) * 100;
   }
@@ -146,246 +279,62 @@ export default function Home() {
     <main className="flex h-screen w-full flex-col overflow-hidden">
       {/* Main Trading Area */}
       <div className="flex flex-1 overflow-hidden">
-        
         {/* Left Side: Chart and Positions */}
         <div className="flex flex-1 flex-col border-r border-border">
-          {/* Top: Chart Area Placeholder */}
-          <div className="flex-1 bg-background flex flex-col">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-panel/50">
-              <div className="flex items-center gap-4">
-                <span className="text-2xl font-bold">BTC-USDC</span>
-                <span className="text-xl font-mono text-green-500">${MOCK_PRICE.toLocaleString()}</span>
-              </div>
-              <div className="text-xs text-muted flex gap-4 bg-background px-3 py-1.5 rounded-lg border border-border">
-                <div className="flex flex-col border-r border-border pr-3">
-                  <span className="text-muted/70 mb-0.5">Total Volume</span>
-                  <span className="font-mono text-white">${(marketState.total_volume / DECIMALS).toLocaleString()}</span>
-                </div>
-                <div className="flex flex-col border-r border-border pr-3 pl-1">
-                  <span className="text-muted/70 mb-0.5">Global Skew</span>
-                  <span className={`font-mono font-bold ${isSkewLong ? 'text-brand' : isSkewShort ? 'text-danger' : 'text-white'}`}>
-                    {skew === 0 ? 'Balanced' : `${isSkewLong ? 'Long' : 'Short'} $${Math.abs(Number(skewDisplay))}`}
-                  </span>
-                </div>
-                <div className="flex flex-col pl-1">
-                  <span className="text-muted/70 mb-0.5">Acc. Funding Index</span>
-                  <span className="font-mono text-white">{marketState.global_funding / DECIMALS} USDC / Unit</span>
-                </div>
-              </div>
-            </div>
-            
+          <div className="flex-1 bg-background flex flex-col relative overflow-hidden">
+            <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand/10 blur-[100px] rounded-full pointer-events-none"></div>
+            <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-brand/5 blur-[100px] rounded-full pointer-events-none"></div>
+
+            <MarketHeader currentPrice={currentPrice} marketState={marketState} loading={priceLoading} error={priceError} />
+
             <div className="flex-1 flex items-center justify-center text-muted h-full w-full">
               <TradingChart />
             </div>
           </div>
 
-          {/* Bottom: Positions Dashboard */}
-          <div className="h-64 border-t border-border bg-panel flex flex-col">
-            <div className="flex gap-4 px-4 py-2 border-b border-border text-sm font-medium">
-              <button className="text-white border-b-2 border-brand pb-2 -mb-2.25">Positions</button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              <div className="w-full border border-border rounded-lg bg-background overflow-hidden h-full flex flex-col">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-panel/50 text-muted border-b border-border">
-                    <tr>
-                      <th className="px-4 py-2 font-medium">Market</th>
-                      <th className="px-4 py-2 font-medium">Size</th>
-                      <th className="px-4 py-2 font-medium">Margin</th>
-                      <th className="px-4 py-2 font-medium">Entry Price</th>
-                      <th className="px-4 py-2 font-medium">TP / SL</th>
-                      <th className="px-4 py-2 font-medium">PnL</th>
-                      <th className="px-4 py-2 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {!publicKey ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">
-                          Connect wallet to view positions.
-                        </td>
-                      </tr>
-                    ) : !position ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">
-                          No open positions yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr className="border-b border-border/50 last:border-0 hover:bg-panel/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <span className="font-bold text-white">BTC-USDC</span>
-                          <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded ${position.is_long ? 'bg-brand/20 text-brand' : 'bg-danger/20 text-danger'}`}>
-                            {position.leverage}x {position.is_long ? 'Long' : 'Short'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono">{((position.margin/10000000) * position.leverage / MOCK_PRICE).toFixed(4)} BTC</td>
-                        <td className="px-4 py-3 font-mono">{position.margin / 10000000} USDC</td>
-                        <td className="px-4 py-3 font-mono">${(position.entry_price / 10000000).toLocaleString()}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-muted">
-                          {position.take_profit > 0 ? <span className="text-brand">TP: ${(position.take_profit/10000000).toLocaleString()}</span> : 'No TP'}<br/>
-                          {position.stop_loss > 0 ? <span className="text-danger">SL: ${(position.stop_loss/10000000).toLocaleString()}</span> : 'No SL'}
-                        </td>
-                        <td className={`px-4 py-3 font-mono ${pnl >= 0 ? 'text-brand' : 'text-danger'}`}>
-                          {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} ({pnlPercent.toFixed(2)}%)
-                          <div className="text-xs text-muted font-sans mt-0.5" title="Funding PnL">
-                            Funding: {fundingPnl >= 0 ? '+' : ''}{fundingPnl.toFixed(2)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button 
-                              onClick={handleTriggerKeeper}
-                              disabled={isSubmitting}
-                              className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/40 px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50"
-                              title="Simulate a Keeper Bot checking TP/SL targets"
-                            >
-                              Simulate Keeper
-                            </button>
-                            <button 
-                              onClick={handleClosePosition}
-                              disabled={isSubmitting}
-                              className="bg-border hover:bg-border/80 text-white px-3 py-1.5 rounded text-xs transition-colors disabled:opacity-50"
-                            >
-                              Close
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <PositionsTable
+            publicKey={publicKey}
+            position={position}
+            pendingPosition={pendingPosition}
+            limitOrders={limitOrders}
+            currentPrice={currentPrice}
+            pnl={pnl}
+            pnlPercent={pnlPercent}
+            fundingPnl={fundingPnl}
+            isSubmitting={isSubmitting}
+            onClosePosition={handleClosePosition}
+            onTriggerKeeper={handleTriggerKeeper}
+            onSharePnL={() => setShowShareCard(true)}
+          />
         </div>
 
         {/* Right Side: Order Entry Panel */}
-        <div className="w-[320px] bg-panel flex flex-col overflow-y-auto border-l border-border">
-          <div className="p-4 border-b border-border flex justify-between items-center">
-            <span className="font-semibold">Place Order</span>
-          </div>
-          
-          <div className="p-4 flex flex-col gap-5">
-            
-            {/* Long / Short Toggle */}
-            <div className="flex bg-background rounded p-1 gap-1">
-              <button 
-                onClick={() => setPositionType('Long')}
-                className={`flex-1 py-1.5 text-sm font-semibold rounded transition-colors ${positionType === 'Long' ? 'bg-brand text-white' : 'text-muted hover:text-white'}`}
-              >
-                Long
-              </button>
-              <button 
-                onClick={() => setPositionType('Short')}
-                className={`flex-1 py-1.5 text-sm font-semibold rounded transition-colors ${positionType === 'Short' ? 'bg-danger text-white' : 'text-muted hover:text-white'}`}
-              >
-                Short
-              </button>
-            </div>
-
-            {/* Margin Input */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs text-muted">
-                <span>Margin (USDC)</span>
-                <span>Available: {balances ? balances.xlm : '0.00'}</span>
-              </div>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  placeholder="0.00" 
-                  value={marginInput}
-                  onChange={(e) => setMarginInput(e.target.value)}
-                  className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
-                />
-                <span className="absolute right-3 top-2.5 text-sm text-muted">USDC</span>
-              </div>
-            </div>
-
-            {/* Leverage Slider */}
-            <div className="flex flex-col gap-1.5 mt-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted">Leverage</span>
-                <span className="text-white font-mono">{leverage}x</span>
-              </div>
-              <input 
-                type="range" 
-                min="1" 
-                max="50" 
-                value={leverage} 
-                onChange={(e) => setLeverage(parseInt(e.target.value))}
-                className="w-full accent-brand"
-              />
-            </div>
-            
-            <div className="border-t border-border/50 pt-4 mt-2">
-              <span className="text-xs font-semibold text-muted mb-2 block">Advanced Orders (Optional)</span>
-              
-              {/* Take Profit */}
-              <div className="flex flex-col gap-1.5 mb-3">
-                <div className="flex justify-between text-xs text-muted">
-                  <span>Take Profit Price</span>
-                </div>
-                <div className="relative">
-                  <input 
-                    type="number" 
-                    placeholder="None" 
-                    value={tpInput}
-                    onChange={(e) => setTpInput(e.target.value)}
-                    className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
-                  />
-                  <span className="absolute right-3 top-2.5 text-sm text-muted">$</span>
-                </div>
-              </div>
-
-              {/* Stop Loss */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-xs text-muted">
-                  <span>Stop Loss Price</span>
-                </div>
-                <div className="relative">
-                  <input 
-                    type="number" 
-                    placeholder="None" 
-                    value={slInput}
-                    onChange={(e) => setSlInput(e.target.value)}
-                    className="w-full bg-background border border-border rounded px-3 py-2 text-white outline-none focus:border-brand transition-colors font-mono"
-                  />
-                  <span className="absolute right-3 top-2.5 text-sm text-muted">$</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Order Summary */}
-            <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted text-xs">Position Size</span>
-                <span className="font-mono text-white">{sizeInBtc} BTC</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted text-xs">Value</span>
-                <span className="font-mono text-white">${sizeVal.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button 
-              onClick={handleOpenPosition}
-              disabled={!publicKey || !marginVal || isSubmitting || position !== null}
-              className={`w-full py-3 rounded font-bold text-white transition-colors mt-2
-                ${positionType === 'Long' ? 'bg-brand hover:bg-brand-hover' : 'bg-danger hover:bg-danger-hover'}
-                ${(!publicKey || !marginVal || isSubmitting || position !== null) ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-            >
-              {isSubmitting ? 'Processing...' : 
-               !publicKey ? 'Connect Wallet' : 
-               position !== null ? 'Position Already Open' :
-               `${positionType === 'Long' ? 'Buy / Long' : 'Sell / Short'}`}
-            </button>
-          </div>
-        </div>
-
+        <OrderForm
+          publicKey={publicKey}
+          balances={balances}
+          marginBalance={marginBalance}
+          currentPrice={currentPrice}
+          position={position}
+          pnl={pnl}
+          isSubmitting={isSubmitting}
+          onOpenPosition={handleOpenPosition}
+          onDeposit={handleDeposit}
+          onWithdraw={handleWithdraw}
+          is1ClickEnabled={is1ClickEnabled}
+          onToggle1Click={handleToggle1Click}
+        />
       </div>
+
+      {showShareCard && position && (
+        <PnLShareCard
+          asset="BTC"
+          isLong={position.is_long}
+          leverage={position.leverage}
+          entryPrice={Number(position.entry_price)}
+          pnlUsd={pnl}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
     </main>
   );
 }

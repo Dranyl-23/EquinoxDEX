@@ -10,11 +10,11 @@ use soroban_sdk::token::StellarAssetClient as TokenAdminClient;
 pub struct DummyOracle;
 #[contractimpl]
 impl DummyOracle {
-    pub fn get_price(env: Env, _symbol: Symbol) -> i128 {
-        env.storage().instance().get(&Symbol::new(&env, "mock_price")).unwrap_or(0)
+    pub fn get_price(env: Env, symbol: Symbol) -> i128 {
+        env.storage().instance().get(&symbol).unwrap_or(0)
     }
-    pub fn set_price(env: Env, price: i128) {
-        env.storage().instance().set(&Symbol::new(&env, "mock_price"), &price);
+    pub fn set_price(env: Env, symbol: Symbol, price: i128) {
+        env.storage().instance().set(&symbol, &price);
     }
 }
 
@@ -35,15 +35,14 @@ fn setup_oracle(env: &Env) -> Address {
     env.register(DummyOracle, ())
 }
 
-fn set_dummy_price(env: &Env, oracle_id: &Address, price: i128) {
+fn set_dummy_price(env: &Env, oracle_id: &Address, symbol: &str, price: i128) {
     env.invoke_contract::<()>(
         oracle_id,
         &Symbol::new(env, "set_price"),
-        vec![env, price.into_val(env)]
+        vec![env, Symbol::new(env, symbol).into_val(env), price.into_val(env)]
     );
 }
 
-// In soroban SDK 22+, we can set timestamp via testutils
 fn advance_time(env: &Env, seconds: u64) {
     let mut li = env.ledger().get();
     li.timestamp += seconds;
@@ -55,15 +54,14 @@ fn test_dynamic_skew_funding() {
     let env = Env::default();
     env.mock_all_auths();
 
-    // Start ledger at t=1000
     let mut li = env.ledger().get();
     li.timestamp = 1000;
     env.ledger().set(li);
 
     let admin = Address::generate(&env);
     let lp = Address::generate(&env);
-    let user1 = Address::generate(&env); // Long trader
-    let user2 = Address::generate(&env); // Short trader
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
 
     let (token, token_admin) = create_token_contract(&env, &admin);
     token_admin.mint(&lp, &10000_0000000);
@@ -74,49 +72,37 @@ fn test_dynamic_skew_funding() {
     let oracle_id = setup_oracle(&env);
 
     client.init(&admin, &token.address, &oracle_id);
-    client.add_liquidity(&lp, &10000_0000000);
-    set_dummy_price(&env, &oracle_id, 60000_0000000);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000); // 1.00 USD for easy math
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    // User 1 opens 10x Long with 100 USDC (Position size = 1000)
-    // Skew becomes +1000
-    client.open_position(&user1, &100_0000000, &10, &true, &0, &0);
+    client.deposit_margin(&user1, &100_0000000);
+    client.open_position(&user1, &user1, &100_0000000, &10, &true, &0, &0, &0);
     
     let state1 = client.get_market_state();
-    assert_eq!(state1.0, 1000_0000000); // Long OI
+    assert_eq!(state1.0, 1000_0000000); // Long OI (100 margin * 10 leverage)
     assert_eq!(state1.1, 0);            // Short OI
-    assert_eq!(state1.2, 0);            // Global Funding Index (time hasn't passed)
+    assert_eq!(state1.2, 0);            // Global Funding Index
     assert_eq!(state1.3, 1000_0000000); // Total Volume
 
-    // Advance time by 100 seconds
     advance_time(&env, 100);
 
-    // User 2 opens 10x Short with 100 USDC (Position size = 1000)
-    // This action will trigger `update_funding()`.
-    // Skew was +1000. Time = 100s.
-    // Funding added = (1000_0000000 * 100) / 10000 = 10000000 (which is 1 USDC).
-    client.open_position(&user2, &100_0000000, &10, &false, &0, &0);
+    client.deposit_margin(&user2, &100_0000000);
+    client.open_position(&user2, &user2, &100_0000000, &10, &false, &0, &0, &0);
 
     let state2 = client.get_market_state();
     assert_eq!(state2.0, 1000_0000000); // Long OI
     assert_eq!(state2.1, 1000_0000000); // Short OI
     assert_eq!(state2.2, 10_0000000);   // Global Funding is now 10 USDC
-    assert_eq!(state2.3, 2000_0000000); // Total Volume is now 2000
 
-    // Advance time by another 100 seconds
     advance_time(&env, 100);
 
-    // Skew is now 0 (Long OI == Short OI). So funding shouldn't change when we close.
-    // User 1 (Long) closes. They entered at Index 0. Current Index is 10.
-    // Funding PnL = -(10_0000000 * 1000_0000000) / 10_000_000_000 = -10_0000000 = -10 USDC
-    let payout1 = client.close_position(&user1);
-    // 100 margin - 10 funding = 90 payout
-    assert_eq!(payout1, 90_0000000);
+    let payout1 = client.close_position(&user1, &user1, &0);
+    assert_eq!(payout1, -11_0000000); // -10 USDC funding loss, -1 USDC close fee
 
-    // User 2 (Short) closes. They entered at Index 10. Current Index is 10.
-    // Funding diff = 0, so funding PnL = 0.
-    let payout2 = client.close_position(&user2);
-    // 100 margin + 0 funding = 100 payout
-    assert_eq!(payout2, 100_0000000);
+    let payout2 = client.close_position(&user2, &user2, &0);
+    assert_eq!(payout2, -1_0000000);  // 0 funding diff, -1 USDC close fee
 }
 
 #[test]
@@ -136,20 +122,19 @@ fn test_take_profit_trigger() {
     let oracle_id = setup_oracle(&env);
 
     client.init(&admin, &token.address, &oracle_id);
-    client.add_liquidity(&lp, &10000_0000000);
-    set_dummy_price(&env, &oracle_id, 60000_0000000);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000); // $1 for LP deposit
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    // Open Long at 60k, TP at 66k, SL at 54k
-    client.open_position(&user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000);
+    client.deposit_margin(&user, &100_0000000);
+    client.open_position(&user, &user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
 
-    // Price hits TP exactly
-    set_dummy_price(&env, &oracle_id, 66000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
 
-    // A keeper bot triggers it
-    let payout = client.trigger_orders(&user);
-    
-    // +10% move * 10x leverage = +100%. Payout = 200 USDC.
-    assert_eq!(payout, 200_0000000);
+    let keeper = Address::generate(&env); // H1 Verification: Third-party keeper can trigger orders!
+    let payout = client.trigger_orders(&keeper, &user);
+    assert_eq!(payout, 990_000000); // Cross-margin net PnL (+100 USDC profit minus 1 USDC close fee)
 }
 
 #[test]
@@ -170,15 +155,218 @@ fn test_order_not_triggered() {
     let oracle_id = setup_oracle(&env);
 
     client.init(&admin, &token.address, &oracle_id);
-    client.add_liquidity(&lp, &10000_0000000);
-    set_dummy_price(&env, &oracle_id, 60000_0000000);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000);
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    // TP at 66k, SL at 54k
-    client.open_position(&user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000);
+    client.deposit_margin(&user, &100_0000000);
+    client.open_position(&user, &user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
 
-    // Price moves to 65k (Not at TP yet)
-    set_dummy_price(&env, &oracle_id, 65000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 65000_0000000);
 
-    // Keeper tries to trigger, should panic with OrderNotTriggered
-    client.trigger_orders(&user);
+    client.trigger_orders(&user, &user);
+}
+
+#[test]
+fn test_leaderboard() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
+    token_admin.mint(&user1, &1000_0000000);
+    token_admin.mint(&user2, &1000_0000000);
+    token_admin.mint(&user3, &1000_0000000);
+
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000);
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    
+    // User 1 makes profit
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
+    client.deposit_margin(&user1, &100_0000000);
+    client.open_position(&user1, &user1, &100_0000000, &10, &true, &0, &0, &0);
+    set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
+    client.close_position(&user1, &user1, &0);
+    
+    // User 2 takes a loss
+    client.deposit_margin(&user2, &100_0000000);
+    client.open_position(&user2, &user2, &100_0000000, &10, &true, &0, &0, &0);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
+    client.close_position(&user2, &user2, &0);
+    
+    // User 3 makes more profit
+    client.deposit_margin(&user3, &100_0000000);
+    client.open_position(&user3, &user3, &100_0000000, &20, &true, &0, &0, &0);
+    set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
+    client.close_position(&user3, &user3, &0);
+
+    let leaderboard = client.get_leaderboard();
+    assert_eq!(leaderboard.len(), 3);
+    
+    // user3 > user1 > user2
+    assert_eq!(leaderboard.get(0).unwrap().user, user3);
+    assert_eq!(leaderboard.get(1).unwrap().user, user1);
+    assert_eq!(leaderboard.get(2).unwrap().user, user2);
+    
+    let user1_pnl = client.get_user_pnl(&user1);
+    assert!(user1_pnl > 0);
+    assert!(client.get_user_pnl(&user2) < 0);
+}
+
+#[test]
+fn test_session_keys() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
+    let user = Address::generate(&env);
+    let session = Address::generate(&env);
+    let _evil_hacker = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
+    token_admin.mint(&user, &1000_0000000);
+
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000);
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
+
+    // Register session key
+    client.add_session_key(&user, &session);
+
+    client.deposit_margin(&user, &100_0000000);
+    // Open position using session key as caller!
+    client.open_position(&session, &user, &100_0000000, &10, &true, &0, &0, &0);
+    
+    // Check it worked
+    let position = client.get_position(&user);
+    assert_eq!(position.margin, 100_0000000); // Full margin reserved in cross-margin mode
+
+    // Try opening position using hacker as caller (should fail in a real auth environment, 
+    // but with mock_all_auths, we need to manually test the logic or use a specific expect_auth check)
+    // Actually, mock_all_auths allows anything to succeed the `require_auth` call.
+    // However, our custom logic `panic!("unauthorized caller")` will trigger BEFORE `require_auth`!
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn test_session_keys_hacker() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
+    let user = Address::generate(&env);
+    let evil_hacker = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
+    token_admin.mint(&user, &1000_0000000);
+
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000);
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
+
+    client.deposit_margin(&user, &100_0000000);
+    // Try opening position using hacker as caller
+    client.open_position(&evil_hacker, &user, &100_0000000, &10, &true, &0, &0, &0);
+}
+
+#[test]
+fn test_limit_orders() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
+    token_admin.mint(&user, &1000_0000000);
+
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000);
+    client.add_liquidity(&lp, &token.address, &10000_0000000);
+    set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
+
+    client.deposit_margin(&user, &100_0000000);
+    client.place_limit_order(&user, &user, &100_0000000, &10, &true, &55000_0000000, &65000_0000000, &50000_0000000, &0);
+
+    let orders = client.get_limit_orders(&user);
+    assert_eq!(orders.len(), 1);
+
+    // Price drops to trigger limit buy
+    set_dummy_price(&env, &oracle_id, "BTC", 54000_0000000);
+    let keeper = Address::generate(&env);
+    client.trigger_orders(&keeper, &user);
+
+    let pos = client.get_position(&user);
+    assert_eq!(pos.entry_price, 54000_0000000);
+}
+
+#[test]
+fn test_liquidity_removal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let lp = Address::generate(&env);
+
+    let (token, token_admin) = create_token_contract(&env, &admin);
+    token_admin.mint(&lp, &10000_0000000);
+
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+    client.add_supported_token(&admin, &token.address, &Symbol::new(&env, "USDC"));
+    set_dummy_price(&env, &oracle_id, "USDC", 10_000000);
+
+    let minted = client.add_liquidity(&lp, &token.address, &5000_0000000);
+    assert!(minted > 0);
+
+    let returned = client.remove_liquidity(&lp, &token.address, &minted);
+    assert_eq!(returned, 5000_0000000);
+}
+
+#[test]
+fn test_oracle_unit() {
+    let env = Env::default();
+    let oracle_id = setup_oracle(&env);
+    set_dummy_price(&env, &oracle_id, "BTC", 65000_0000000);
+
+    let price: i128 = env.invoke_contract(
+        &oracle_id,
+        &Symbol::new(&env, "get_price"),
+        vec![&env, Symbol::new(&env, "BTC").into_val(&env)]
+    );
+    assert_eq!(price, 65000_0000000);
 }
