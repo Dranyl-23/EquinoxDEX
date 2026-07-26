@@ -21,9 +21,12 @@ jobs:
       - name: Install Frontend Dependencies
         run: |
           cd web
-          npm ci
+          npm install
 
       - name: Lint & Build Frontend
+        env:
+          NEXT_PUBLIC_CONTRACT_ID: CAAITOVUWRENIVCLDX7BOLXWX6UVXGFNCG2564J7NHHSZU4Y4RC72NCJ
+          NEXT_PUBLIC_RPC_URL: https://soroban-testnet.stellar.org
         run: |
           cd web
           npm run lint

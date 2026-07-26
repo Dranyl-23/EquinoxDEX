@@ -9,7 +9,7 @@ export const RPC_URL =
 export const HORIZON_URL =
   process.env.NEXT_PUBLIC_HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
 export const USDC_ISSUER = process.env.NEXT_PUBLIC_USDC_ISSUER ?? '';
-export const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID ?? '';
+export const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || 'CAAITOVUWRENIVCLDX7BOLXWX6UVXGFNCG2564J7NHHSZU4Y4RC72NCJ';
 
 // v15 SDK: use the `rpc` namespace (the old `SorobanRpc` namespace is gone).
 export const server = new rpc.Server(RPC_URL);
