@@ -20,7 +20,7 @@ import {
   buildFundSessionKeyXDR,
 } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
-import { getSessionKey, generateSessionKey, clearSessionKey, hasActiveSessionKey } from '@/lib/sessionKey';
+import { getSessionKey, generateSessionKey, clearSessionKey, use1ClickEnabled } from '@/lib/sessionKey';
 import { TradingChart } from '@/components/TradingChart';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 import { useLivePrice } from '@/hooks/useLivePrice';
@@ -45,7 +45,7 @@ export default function Home() {
   const [marketState, setMarketState] = useState({ long_oi: 0, short_oi: 0, global_funding: 0, total_volume: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
-  const [is1ClickEnabled, setIs1ClickEnabled] = useState(hasActiveSessionKey());
+  const is1ClickEnabled = use1ClickEnabled();
 
   // Poll for balances, position, and market state
   useEffect(() => {
@@ -227,7 +227,6 @@ export default function Home() {
     if (!publicKey) return;
     if (is1ClickEnabled) {
       clearSessionKey();
-      setIs1ClickEnabled(false);
     } else {
       setIsSubmitting(true);
       try {
@@ -240,7 +239,6 @@ export default function Home() {
         }
         const xdr = await buildAddSessionKeyXDR(publicKey, session.publicKey);
         await signAndSubmit(xdr, publicKey, true);
-        setIs1ClickEnabled(true);
       } catch (e: unknown) {
         clearSessionKey();
         alert(`Failed to enable 1-Click Trading: ${e instanceof Error ? e.message : String(e)}`);

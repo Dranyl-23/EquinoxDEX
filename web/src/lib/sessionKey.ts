@@ -1,4 +1,5 @@
 import { Keypair } from '@stellar/stellar-sdk';
+import { useSyncExternalStore } from 'react';
 
 const SESSION_KEY_STORAGE_KEY = 'equinox_session_key';
 
@@ -21,6 +22,7 @@ export function generateSessionKey(): SessionKeyData {
 
   if (typeof window !== 'undefined' && window.sessionStorage) {
     sessionStorage.setItem(SESSION_KEY_STORAGE_KEY, JSON.stringify(data));
+    window.dispatchEvent(new Event('storage'));
   }
   return data;
 }
@@ -48,9 +50,26 @@ export function getSessionKey(): SessionKeyData | null {
 export function clearSessionKey() {
   if (typeof window !== 'undefined' && window.sessionStorage) {
     sessionStorage.removeItem(SESSION_KEY_STORAGE_KEY);
+    window.dispatchEvent(new Event('storage'));
   }
 }
 
 export function hasActiveSessionKey(): boolean {
   return getSessionKey() !== null;
+}
+
+// React 18/19 subscription hook to prevent SSR hydration mismatches
+const subscribeSessionKey = (callback: () => void) => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', callback);
+    return () => window.removeEventListener('storage', callback);
+  }
+  return () => {};
+};
+
+const getSessionKeySnapshot = () => hasActiveSessionKey();
+const getSessionKeyServerSnapshot = () => false;
+
+export function use1ClickEnabled(): boolean {
+  return useSyncExternalStore(subscribeSessionKey, getSessionKeySnapshot, getSessionKeyServerSnapshot);
 }
