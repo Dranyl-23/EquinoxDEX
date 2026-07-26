@@ -217,25 +217,26 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         </div>
 
         {/* Primary Order Action Button */}
-        <div className="relative">
-          <div className={`absolute inset-0 blur-md opacity-50 ${positionType === 'Long' ? 'bg-brand' : 'bg-danger'}`}></div>
-          <button 
-            onClick={handleSubmitOrder}
-            disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
-            className={`relative w-full py-3.5 rounded-lg font-bold text-white transition-all transform hover:scale-[1.01] active:scale-[0.99]
-              ${positionType === 'Long' ? 'bg-linear-to-r from-brand to-brand-hover shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'bg-linear-to-r from-danger to-danger-hover shadow-[0_0_20px_rgba(239,68,68,0.3)]'}
-              ${(!publicKey || !isOrderValid || isSubmitting || position !== null) ? 'opacity-50 cursor-not-allowed transform-none' : ''}
-            `}
-          >
-          {isSubmitting ? 'Processing Order...' : 
-           !publicKey ? 'Connect Wallet to Trade' : 
-           position !== null ? 'Position Already Open' :
-           !isValidMargin ? 'Enter Margin' :
-           !isValidTrigger ? 'Enter Trigger Price' :
-           !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
-           `${positionType === 'Long' ? 'Buy / Long BTC' : 'Sell / Short BTC'}`}
-          </button>
-        </div>
+        <button 
+          onClick={handleSubmitOrder}
+          disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
+          className={`w-full py-3.5 rounded-lg font-bold text-sm transition-all text-center border
+            ${(!publicKey || !isOrderValid || isSubmitting || position !== null)
+              ? 'bg-panel/90 text-muted/70 border-border/60 cursor-not-allowed'
+              : positionType === 'Long'
+                ? 'bg-brand hover:bg-brand-hover text-white border-brand/50 shadow-lg shadow-brand/20 active:scale-[0.99]'
+                : 'bg-danger hover:bg-danger-hover text-white border-danger/50 shadow-lg shadow-danger/20 active:scale-[0.99]'
+            }
+          `}
+        >
+        {isSubmitting ? 'Processing Order...' : 
+         !publicKey ? 'Connect Wallet to Trade' : 
+         position !== null ? 'Position Already Open' :
+         !isValidMargin ? 'Enter Margin' :
+         !isValidTrigger ? 'Enter Trigger Price' :
+         !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
+         `${positionType === 'Long' ? 'Buy / Long BTC' : 'Sell / Short BTC'}`}
+        </button>
 
         {/* Advanced Orders (Optional) */}
         <div className="border-t border-border/50 pt-3 mt-1">
