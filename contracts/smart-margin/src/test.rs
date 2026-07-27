@@ -367,3 +367,28 @@ fn test_oracle_unit() {
     );
     assert_eq!(price, 65000_0000000);
 }
+
+#[test]
+fn test_referrals() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let referrer = Address::generate(&env);
+    let referee = Address::generate(&env);
+
+    let (token, _token_admin) = create_token_contract(&env, &admin);
+    let client = setup(&env);
+    let oracle_id = setup_oracle(&env);
+
+    client.init(&admin, &token.address, &oracle_id);
+
+    // 1. Register referral
+    client.register_referral(&referee, &referrer);
+
+    let (kickback, lifetime, count) = client.get_referral_stats(&referrer);
+    assert_eq!(count, 1);
+    assert_eq!(kickback, 0);
+    assert_eq!(lifetime, 0);
+}
+

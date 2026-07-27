@@ -58,6 +58,11 @@ pub enum DataKey {
     SessionKey(Address),
     MarginBalance(Address),
     InsuranceFundBalance,
+    // Referral system
+    ReferralOf(Address),       // referee -> referrer address
+    ReferralKickback(Address), // referrer -> unclaimed kickback i128
+    ReferralLifetime(Address), // referrer -> lifetime kickback earned i128
+    ReferralCount(Address),    // referrer -> number of referred traders u32
 }
 
 #[contracterror]
@@ -871,6 +876,19 @@ impl SmartMarginContract {
             Self::update_leaderboard(env, user.clone(), total_pnl);
         }
 
+        // Referral kickback: credit 20% of pool_fee_cut to referrer (if user was referred)
+        if let Some(referrer) = env.storage().persistent().get::<DataKey, Address>(&DataKey::ReferralOf(user.clone())) {
+            let kickback = pool_fee_cut / 5; // 20% of the fee going to pool
+            let mut ref_kickback: i128 = env.storage().persistent().get(&DataKey::ReferralKickback(referrer.clone())).unwrap_or(0);
+            ref_kickback += kickback;
+            env.storage().persistent().set(&DataKey::ReferralKickback(referrer.clone()), &ref_kickback);
+            env.storage().persistent().extend_ttl(&DataKey::ReferralKickback(referrer.clone()), 10_000, 100_000);
+            let mut ref_lifetime: i128 = env.storage().persistent().get(&DataKey::ReferralLifetime(referrer.clone())).unwrap_or(0);
+            ref_lifetime += kickback;
+            env.storage().persistent().set(&DataKey::ReferralLifetime(referrer.clone()), &ref_lifetime);
+            env.storage().persistent().extend_ttl(&DataKey::ReferralLifetime(referrer.clone()), 10_000, 100_000);
+        }
+
         // Task #7: Emits pos_close event
         env.events().publish((Symbol::new(env, "pos_close"), user.clone()), (position_id, actual_margin_to_close, actual_trader_pnl));
 
@@ -1006,6 +1024,59 @@ impl SmartMarginContract {
         
         env.storage().persistent().set(&DataKey::GlobalLeaderboard, &board);
         env.storage().persistent().extend_ttl(&DataKey::GlobalLeaderboard, 10_000, 100_000);
+    }
+
+    // ───────────────────────── Referral System ─────────────────────────
+
+    /// Register a referral relationship. Can only be set once per referee.
+    /// Called automatically when a user visits with a ?ref= param and connects their wallet.
+    pub fn register_referral(env: Env, referee: Address, referrer: Address) -> Result<(), Error> {
+        referee.require_auth();
+        // Prevent self-referral
+        if referee == referrer {
+            return Err(Error::Unauthorized);
+        }
+        // Only register once
+        if env.storage().persistent().has(&DataKey::ReferralOf(referee.clone())) {
+            return Ok(());
+        }
+        env.storage().persistent().set(&DataKey::ReferralOf(referee.clone()), &referrer);
+        env.storage().persistent().extend_ttl(&DataKey::ReferralOf(referee.clone()), 10_000, 100_000);
+
+        // Increment referrer's count
+        let mut count: u32 = env.storage().persistent().get(&DataKey::ReferralCount(referrer.clone())).unwrap_or(0);
+        count += 1;
+        env.storage().persistent().set(&DataKey::ReferralCount(referrer.clone()), &count);
+        env.storage().persistent().extend_ttl(&DataKey::ReferralCount(referrer.clone()), 10_000, 100_000);
+
+        env.events().publish((Symbol::new(&env, "referral"), referrer.clone()), (referee.clone(),));
+        Ok(())
+    }
+
+    /// Read referral stats for a referrer: (unclaimed_kickback, lifetime_earned, referred_count)
+    pub fn get_referral_stats(env: Env, referrer: Address) -> (i128, i128, u32) {
+        let kickback: i128 = env.storage().persistent().get(&DataKey::ReferralKickback(referrer.clone())).unwrap_or(0);
+        let lifetime: i128 = env.storage().persistent().get(&DataKey::ReferralLifetime(referrer.clone())).unwrap_or(0);
+        let count: u32 = env.storage().persistent().get(&DataKey::ReferralCount(referrer.clone())).unwrap_or(0);
+        (kickback, lifetime, count)
+    }
+
+    /// Claim all accumulated referral kickback into the referrer's cross-margin balance.
+    pub fn claim_referral_kickback(env: Env, referrer: Address) -> Result<(), Error> {
+        referrer.require_auth();
+        let kickback: i128 = env.storage().persistent().get(&DataKey::ReferralKickback(referrer.clone())).unwrap_or(0);
+        if kickback <= 0 {
+            return Err(Error::InvalidMargin);
+        }
+        // Transfer kickback to margin balance
+        let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(referrer.clone())).unwrap_or(0);
+        bal += kickback;
+        env.storage().persistent().set(&DataKey::MarginBalance(referrer.clone()), &bal);
+        env.storage().persistent().extend_ttl(&DataKey::MarginBalance(referrer.clone()), 10_000, 100_000);
+        // Reset unclaimed kickback
+        env.storage().persistent().set(&DataKey::ReferralKickback(referrer.clone()), &0i128);
+        env.events().publish((Symbol::new(&env, "kickback_claim"), referrer.clone()), (kickback,));
+        Ok(())
     }
 }
 

@@ -2,78 +2,126 @@
 import { useState, useEffect } from 'react';
 import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
-import { readMarginBalance } from '@/lib/contract';
-import { DECIMALS } from '@/lib/constants';
+import {
+  readPoolState,
+  readMarginBalance,
+  buildAddLiquidityXDR,
+  buildRemoveLiquidityXDR,
+  contractConfigured,
+} from '@/lib/contract';
+import { signAndSubmit } from '@/lib/sign';
+import { USDC_TOKEN_ID } from '@/lib/stellar';
+import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 import { useLanguage } from '@/components/LanguageProvider';
+import { useToast } from '@/components/Toast';
 
 export default function VaultsPage() {
-  const { t, formatNum } = useLanguage();
+  const { t } = useLanguage();
+  const { toast } = useToast();
   const wallet = useWalletContext();
   const { publicKey } = wallet;
 
   const [balances, setBalances] = useState<Balances | null>(null);
-  const [marginBalance, setMarginBalance] = useState<number>(0);
+  const [poolState, setPoolState] = useState({ totalPool: 0, totalShares: 0, userShares: 0 });
   const [activeTab, setActiveTab] = useState<'deposit' | 'redeem'>('deposit');
   const [amountInput, setAmountInput] = useState('');
-  const [userElpBalance, setUserElpBalance] = useState<number>(437.82);
-  const [userEarnedYield, setUserEarnedYield] = useState<number>(68.40);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [txSuccessMsg, setTxSuccessMsg] = useState<string | null>(null);
 
-  // Vault Stats
-  const elpPrice = 1.142; // 1 ELP = 1.142 USDC
-  const tvl = 3850000;
-  const apy = 24.8;
-  const dailyYield = 4820;
+  // Estimated stats (no on-chain APY oracle — clearly labelled as estimates)
+  const APY_EST = 24.8;
+  const DAILY_YIELD_EST_PCT = APY_EST / 365 / 100;
 
   useEffect(() => {
-    if (!publicKey) return;
+    if (!contractConfigured()) return;
     const load = async () => {
       try {
-        const bal = await fetchBalances(publicKey);
-        setBalances(bal);
-        const mBal = await readMarginBalance(publicKey);
-        setMarginBalance(mBal);
+        if (publicKey) {
+          const bal = await fetchBalances(publicKey);
+          setBalances(bal);
+        }
+        const state = await readPoolState(
+          publicKey || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+        );
+        setPoolState(state);
       } catch {
-        // Silently swallow glitches
+        // Silently swallow polling glitches
       }
     };
     load();
-    const interval = setInterval(load, 10000);
+    const interval = setInterval(load, RPC_POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [publicKey]);
 
-  const availableUsdc = Math.max(
-    balances ? parseFloat(balances.usdc) || 0 : 0,
-    marginBalance ? marginBalance / DECIMALS : 0,
-    300
-  );
+  // Derived on-chain stats
+  const tvl = poolState.totalPool / DECIMALS;
+  const elpPrice = poolState.totalShares > 0 ? poolState.totalPool / poolState.totalShares : 1;
+  const userElpBalance = poolState.userShares; // shares are the ELP token units
+  const userDepositedUsdc =
+    poolState.totalShares > 0
+      ? (poolState.userShares * poolState.totalPool) / poolState.totalShares / DECIMALS
+      : 0;
+  const dailyYield = tvl * DAILY_YIELD_EST_PCT;
 
+  const availableUsdc = balances ? parseFloat(balances.usdc) || 0 : 0;
   const amountVal = parseFloat(amountInput) || 0;
-  const elpToReceive = activeTab === 'deposit' ? amountVal / elpPrice : amountVal * elpPrice;
+  const elpToReceive =
+    activeTab === 'deposit'
+      ? elpPrice > 0
+        ? (amountVal * DECIMALS) / elpPrice
+        : amountVal
+      : (amountVal * elpPrice) / DECIMALS;
 
-  const handleDeposit = () => {
-    if (amountVal <= 0) return;
+  const handleDeposit = async () => {
+    if (!publicKey || amountVal <= 0) return;
     setIsSubmitting(true);
-    setTxSuccessMsg(null);
-    setTimeout(() => {
-      setUserElpBalance((prev) => prev + amountVal / elpPrice);
-      setIsSubmitting(false);
-      setTxSuccessMsg(`Successfully deposited ${amountVal.toFixed(2)} USDC into ELP Vault!`);
+    try {
+      const scaledAmount = Math.trunc(amountVal * DECIMALS);
+      const xdr = await buildAddLiquidityXDR(publicKey, USDC_TOKEN_ID, scaledAmount);
+      await signAndSubmit(xdr, publicKey, true);
+
+      // Refresh state
+      const bal = await fetchBalances(publicKey);
+      setBalances(bal);
+      const state = await readPoolState(publicKey);
+      setPoolState(state);
       setAmountInput('');
-    }, 1200);
+      toast(
+        'Deposit Successful',
+        'success',
+        `Deposited ${amountVal.toFixed(2)} USDC — ELP tokens minted to your account`
+      );
+    } catch (e: unknown) {
+      toast('Deposit Failed', 'error', e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleRedeem = () => {
-    if (amountVal <= 0) return;
+  const handleRedeem = async () => {
+    if (!publicKey || amountVal <= 0) return;
     setIsSubmitting(true);
-    setTxSuccessMsg(null);
-    setTimeout(() => {
-      setUserElpBalance((prev) => Math.max(0, prev - amountVal));
-      setIsSubmitting(false);
-      setTxSuccessMsg(`Successfully redeemed ${amountVal.toFixed(2)} ELP for ${(amountVal * elpPrice).toFixed(2)} USDC!`);
+    try {
+      // amountInput is in ELP shares — convert to scaled integer
+      const scaledShares = Math.trunc(amountVal);
+      const xdr = await buildRemoveLiquidityXDR(publicKey, USDC_TOKEN_ID, scaledShares);
+      await signAndSubmit(xdr, publicKey, true);
+
+      // Refresh state
+      const bal = await fetchBalances(publicKey);
+      setBalances(bal);
+      const state = await readPoolState(publicKey);
+      setPoolState(state);
       setAmountInput('');
-    }, 1200);
+      toast(
+        'Redemption Successful',
+        'success',
+        `Redeemed ${amountVal.toFixed(2)} ELP — USDC returned to wallet`
+      );
+    } catch (e: unknown) {
+      toast('Redeem Failed', 'error', e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -92,23 +140,33 @@ export default function VaultsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('totalValueLocked')}</div>
-            <div className="text-2xl font-mono font-bold text-white">${tvl.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+            <div className="text-2xl font-mono font-bold text-white">
+              ${tvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}{' '}
+              <span className="text-sm text-muted font-sans font-normal">USDC</span>
+            </div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('estimatedApr')}</div>
-            <div className="text-2xl font-mono font-bold text-green-500">{apy}% APY</div>
-            <div className="text-xs text-muted mt-1">Auto-compounded daily</div>
+            <div className="text-2xl font-mono font-bold text-green-500">{APY_EST}% APY</div>
+            <div className="text-xs text-muted mt-1">Est. · Auto-compounded</div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('elpPrice')}</div>
-            <div className="text-2xl font-mono font-bold text-white">${elpPrice.toFixed(4)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+            <div className="text-2xl font-mono font-bold text-white">
+              ${(elpPrice / DECIMALS).toFixed(4)}{' '}
+              <span className="text-sm text-muted font-sans font-normal">USDC</span>
+            </div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('dailyYield')}</div>
-            <div className="text-2xl font-mono font-bold text-green-500">${dailyYield.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+            <div className="text-2xl font-mono font-bold text-green-500">
+              ${dailyYield.toLocaleString(undefined, { maximumFractionDigits: 0 })}{' '}
+              <span className="text-sm text-muted font-sans font-normal">USDC</span>
+            </div>
+            <div className="text-xs text-muted mt-1">Est. · based on {APY_EST}% APY</div>
           </div>
         </div>
 
@@ -121,7 +179,7 @@ export default function VaultsPage() {
             {/* Tabs */}
             <div className="flex border-b border-border pb-3 gap-6 font-semibold text-sm">
               <button
-                onClick={() => { setActiveTab('deposit'); setAmountInput(''); setTxSuccessMsg(null); }}
+                onClick={() => { setActiveTab('deposit'); setAmountInput(''); }}
                 className={`pb-2 transition-all border-b-2 ${
                   activeTab === 'deposit'
                     ? 'text-white border-brand font-bold'
@@ -132,7 +190,7 @@ export default function VaultsPage() {
               </button>
 
               <button
-                onClick={() => { setActiveTab('redeem'); setAmountInput(''); setTxSuccessMsg(null); }}
+                onClick={() => { setActiveTab('redeem'); setAmountInput(''); }}
                 className={`pb-2 transition-all border-b-2 ${
                   activeTab === 'redeem'
                     ? 'text-white border-brand font-bold'
@@ -195,20 +253,13 @@ export default function VaultsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted">Vault Rate:</span>
-                  <span className="text-white">1 ELP = ${elpPrice.toFixed(4)} USDC</span>
+                  <span className="text-white">1 ELP = ${(elpPrice / DECIMALS).toFixed(4)} USDC</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted">Deposit Fee:</span>
                   <span className="text-green-500 font-bold">0.00% (Zero Fee)</span>
                 </div>
               </div>
-
-              {/* Success Notification */}
-              {txSuccessMsg && (
-                <div className="bg-green-500/10 border border-green-500/30 text-green-500 p-3 rounded text-xs font-mono text-center">
-                  ✓ {txSuccessMsg}
-                </div>
-              )}
 
               {/* Action Submit Button */}
               <button
@@ -239,20 +290,28 @@ export default function VaultsPage() {
             <div className="bg-panel border border-border rounded-lg p-6 flex flex-col gap-4">
               <h3 className="text-lg font-semibold text-white border-b border-border pb-4">My Position</h3>
 
-              <div className="flex flex-col gap-3 font-mono text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted">My ELP Tokens:</span>
-                  <span className="font-bold text-white">{userElpBalance.toFixed(2)} ELP</span>
+              {publicKey ? (
+                <div className="flex flex-col gap-3 font-mono text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted">My ELP Tokens:</span>
+                    <span className="font-bold text-white">{userElpBalance.toFixed(2)} ELP</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Deposited Value:</span>
+                    <span className="font-bold text-white">${userDepositedUsdc.toFixed(2)} USDC</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Pool Share:</span>
+                    <span className="font-bold text-brand">
+                      {poolState.totalShares > 0
+                        ? ((poolState.userShares / poolState.totalShares) * 100).toFixed(4)
+                        : '0.0000'}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Deposited Value:</span>
-                  <span className="font-bold text-white">${(userElpBalance * elpPrice).toFixed(2)} USDC</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Real Yield Earned:</span>
-                  <span className="font-bold text-green-500">+${userEarnedYield.toFixed(2)} USDC</span>
-                </div>
-              </div>
+              ) : (
+                <p className="text-xs text-muted text-center py-4">Connect wallet to see your position</p>
+              )}
             </div>
 
             <div className="bg-panel border border-border rounded-lg p-6 flex flex-col gap-4">

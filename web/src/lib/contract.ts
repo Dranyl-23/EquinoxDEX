@@ -10,6 +10,7 @@ import {
   Operation,
 } from '@stellar/stellar-sdk';
 import { server, NETWORK_PASSPHRASE, CONTRACT_ID } from './stellar';
+import { DECIMALS } from './constants';
 
 // A real, funded testnet account used ONLY as the source for read-only
 // simulations. Nothing is signed or submitted for reads, so any existing
@@ -717,3 +718,177 @@ export async function readMarginBalance(userAddress: string): Promise<number> {
     return 0;
   }
 }
+
+/** Shape of a closed-trade record parsed from on-chain pos_close events */
+export interface TradeRecord {
+  id: string;
+  positionId: number;
+  marginClosed: number;   // raw scaled i128
+  pnl: number;            // raw scaled i128 (can be negative)
+  timestamp: number;      // unix seconds from ledger
+  txHash: string;
+}
+
+/**
+ * Read the user's closed-trade history by querying Soroban RPC contract events.
+ * The contract emits `pos_close` events every time a position is fully or
+ * partially closed:  topic = ["pos_close", user_address]
+ *                    body  = (position_id: u64, margin_closed: i128, pnl: i128)
+ */
+export async function readTradeHistory(userAddress: string): Promise<TradeRecord[]> {
+  try {
+    const response = await server.getEvents({
+      startLedger: 1,
+      filters: [
+        {
+          type: 'contract',
+          contractIds: [CONTRACT_ID],
+          topics: [
+            ['*', '*'],   // topic[0] wildcard — SDK requires matching length
+          ],
+        },
+      ],
+      limit: 100,
+    });
+
+    const records: TradeRecord[] = [];
+
+    for (const event of response.events) {
+      // Match only pos_close events for this specific user
+      const topics = event.topic;
+      if (topics.length < 2) continue;
+
+      const topicStr0 = scValToNative(topics[0]);
+      const topicStr1 = scValToNative(topics[1]);
+
+      if (topicStr0 !== 'pos_close') continue;
+
+      // topic[1] is the user address — filter to current user
+      let eventUser = '';
+      try {
+        eventUser = String(topicStr1);
+      } catch {
+        continue;
+      }
+      if (eventUser !== userAddress) continue;
+
+      // Parse event body: (position_id, margin_closed, pnl)
+      try {
+        const body = scValToNative(event.value) as [bigint, bigint, bigint];
+        records.push({
+          id: event.id,
+          positionId: Number(body[0]),
+          marginClosed: Number(body[1]),
+          pnl: Number(body[2]),
+          timestamp: event.ledgerClosedAt
+            ? Math.floor(new Date(event.ledgerClosedAt).getTime() / 1000)
+            : 0,
+          txHash: event.txHash ?? '',
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    // Sort newest first
+    records.sort((a, b) => b.timestamp - a.timestamp);
+    return records;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read on-chain referral stats for a referrer:
+ * returns { kickback: number, lifetime: number, count: number }
+ */
+export async function readReferralStats(referrerAddress: string): Promise<{
+  kickback: number;
+  lifetime: number;
+  count: number;
+}> {
+  try {
+    if (!contractConfigured()) return { kickback: 0, lifetime: 0, count: 0 };
+    const contract = new Contract(CONTRACT_ID);
+    const source = new Account(READ_SOURCE, '0');
+
+    const tx = new TransactionBuilder(source, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call('get_referral_stats', new Address(referrerAddress).toScVal())
+      )
+      .setTimeout(30)
+      .build();
+
+    const sim = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
+      return { kickback: 0, lifetime: 0, count: 0 };
+    }
+
+    const res = scValToNative(sim.result.retval) as [bigint, bigint, number];
+    return {
+      kickback: Number(res[0]) / DECIMALS,
+      lifetime: Number(res[1]) / DECIMALS,
+      count: Number(res[2]),
+    };
+  } catch {
+    return { kickback: 0, lifetime: 0, count: 0 };
+  }
+}
+
+/** Build XDR to register a referral relationship on-chain */
+export async function buildRegisterReferralXDR(
+  referee: string,
+  referrer: string
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(referee);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'register_referral',
+        new Address(referee).toScVal(),
+        new Address(referrer).toScVal()
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Referral registration simulation failed');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/** Build XDR to claim accumulated referral kickback into cross-margin balance */
+export async function buildClaimReferralKickbackXDR(referrer: string): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(referrer);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call('claim_referral_kickback', new Address(referrer).toScVal())
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Claim referral kickback simulation failed');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+

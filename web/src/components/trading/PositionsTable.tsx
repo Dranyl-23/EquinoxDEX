@@ -19,6 +19,7 @@ interface PositionsTableProps {
   onClosePosition: (positionIdOrPct?: any, pct?: number) => Promise<void>;
   onTriggerKeeper: () => Promise<void>;
   onSharePnL: () => void;
+  onUpdateTrailingStop?: () => Promise<void>;
   onCancelOrder?: (index: number) => Promise<void>;
   onModifyTpSl?: (positionId: number, tp: number, sl: number, trailing: number) => Promise<void>;
 }
@@ -37,6 +38,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   onClosePosition,
   onTriggerKeeper,
   onSharePnL,
+  onUpdateTrailingStop,
   onCancelOrder,
   onModifyTpSl,
 }) => {
@@ -176,6 +178,16 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                               >
                                 {t('sharePnl') || 'Share PnL'}
                               </button>
+                              {pos.trailing_stop_distance > 0 && onUpdateTrailingStop && (
+                                <button
+                                  onClick={onUpdateTrailingStop}
+                                  disabled={isSubmitting}
+                                  className="bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/30 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-yellow-500/30 disabled:opacity-50"
+                                  title={`Trailing stop: ${(pos.trailing_stop_distance / DECIMALS).toFixed(2)} USDC distance`}
+                                >
+                                  Update Trail
+                                </button>
+                              )}
                               {selectedCloseId === pos.id ? (
                                 <div className="flex gap-1 items-center bg-panel border border-border/80 rounded-md p-1 shadow-lg">
                                   {[25, 50, 75, 100].map(pct => (

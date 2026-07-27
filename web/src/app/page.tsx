@@ -20,6 +20,7 @@ import {
   buildWithdrawMarginXDR,
   buildAddSessionKeyXDR,
   buildFundSessionKeyXDR,
+  buildUpdateTrailingStopXDR,
 } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
 import { getSessionKey, generateSessionKey, clearSessionKey, use1ClickEnabled } from '@/lib/sessionKey';
@@ -41,11 +42,13 @@ import { MarketSelectorModal } from '@/components/trading/MarketSelectorModal';
 import { ShortcutsModal } from '@/components/trading/ShortcutsModal';
 import { AccountModeModal, AccountMarginMode } from '@/components/trading/AccountModeModal';
 import { MARKETS, MarketInfo } from '@/lib/markets';
+import { useReferral } from '@/hooks/useReferral';
 
 export default function Home() {
   const wallet = useWalletContext();
   const { publicKey } = wallet;
   const { toast } = useToast();
+  useReferral(publicKey);
   const [selectedMarket, setSelectedMarket] = useState<string>('BTCUSDT');
   const [showMarketModal, setShowMarketModal] = useState<boolean>(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
@@ -211,6 +214,15 @@ export default function Home() {
     if (!publicKey) return;
     setIsSubmitting(true);
     try {
+      // Step 1: Ratchet trailing stops to latest price before checking TP/SL
+      try {
+        const trailXdr = await buildUpdateTrailingStopXDR(publicKey);
+        await signAndSubmit(trailXdr, publicKey);
+      } catch {
+        // No trailing stop positions — safe to ignore
+      }
+
+      // Step 2: Trigger TP/SL / liquidation checks
       const xdr = await buildTriggerOrdersXDR(publicKey, publicKey);
       await signAndSubmit(xdr, publicKey);
 
@@ -335,6 +347,22 @@ export default function Home() {
     }
   };
 
+  const handleUpdateTrailingStop = async () => {
+    if (!publicKey) return;
+    setIsSubmitting(true);
+    try {
+      const xdr = await buildUpdateTrailingStopXDR(publicKey);
+      await signAndSubmit(xdr, publicKey);
+      const posList = await readPositions(publicKey);
+      setPositions(posList);
+      toast('Trailing Stop Updated', 'success', 'Stop loss ratcheted to latest price');
+    } catch (e: unknown) {
+      toast('Trailing Stop Error', 'error', e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // PnL Calc for active positions
   let pnl = 0;
   let pnlPercent = 0;
@@ -405,6 +433,7 @@ export default function Home() {
             onClosePosition={handleClosePosition}
             onTriggerKeeper={handleTriggerKeeper}
             onSharePnL={() => setShowShareCard(true)}
+            onUpdateTrailingStop={handleUpdateTrailingStop}
             onCancelOrder={handleCancelOrder}
             onModifyTpSl={handleModifyTpSl}
           />
