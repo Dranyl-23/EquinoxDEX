@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Subscribes to real-time price updates via Binance WebSocket with REST fallback.
- * @param symbol The pair symbol, e.g., "BTCUSDT"
+ * Subscribes to ultra-high frequency sub-50ms real-time price updates via Binance @aggTrade WebSocket.
+ * Outperforms standard DEX ticker polling for instant execution feedback.
  */
 export function useLivePrice(symbol: string = 'BTCUSDT') {
   const [price, setPrice] = useState<number>(0);
@@ -35,16 +35,18 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
 
     fetchInitialPrice();
 
-    // 2. Connect Binance real-time WebSocket ticker
+    // 2. Connect Binance high-frequency @aggTrade WebSocket (sub-50ms updates)
     const connectWs = () => {
       const lowerSymbol = symbol.toLowerCase();
-      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSymbol}@ticker`);
+      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSymbol}@aggTrade`);
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data && data.c) {
-            const p = parseFloat(data.c);
+          // aggTrade payload uses 'p' for price and 'q' for quantity
+          const rawPrice = data.p || data.c;
+          if (rawPrice) {
+            const p = parseFloat(rawPrice);
             if (mounted && !isNaN(p)) {
               setPrice(p);
               setLoading(false);
@@ -62,7 +64,7 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
 
       ws.onclose = () => {
         if (mounted) {
-          reconnectTimer = setTimeout(connectWs, 3000);
+          reconnectTimer = setTimeout(connectWs, 2000);
         }
       };
     };

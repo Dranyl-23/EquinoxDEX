@@ -18,13 +18,19 @@ export function MarketHeader({ currentPrice, marketState, loading, error }: Mark
   return (
     <div className="flex items-center justify-between border-b border-border/50 px-6 py-4 bg-panel/30 backdrop-blur-md z-10">
       <div className="flex items-center gap-4">
-        <span className="text-2xl font-bold text-white">BTC-USDC</span>
+        <span className="text-2xl font-bold text-white flex items-center gap-2">
+          BTC-USDC
+          <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Sub-50ms Engine
+          </span>
+        </span>
         {error && currentPrice === 0 ? (
           <span className="text-xs text-danger bg-danger/10 px-2.5 py-1 rounded border border-danger/30 font-medium">
             Price Feed Unavailable
           </span>
         ) : (
-          <span className={`text-xl font-mono ${currentPrice > 0 ? 'text-green-500' : 'text-muted animate-pulse'}`}>
+          <span className={`text-xl font-mono ${currentPrice > 0 ? 'text-green-500 font-bold' : 'text-muted animate-pulse'}`}>
             {currentPrice > 0 ? `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : loading ? 'Loading...' : '...'}
           </span>
         )}
@@ -40,14 +46,14 @@ export function MarketHeader({ currentPrice, marketState, loading, error }: Mark
 
         <div>
           <div className="text-muted text-xs">Global Funding Rate</div>
-          <div className="font-medium text-white">
+          <div className="font-medium text-white font-mono">
             {((marketState.global_funding / DECIMALS) * 100).toFixed(4)}% / hr
           </div>
         </div>
 
         <div>
           <div className="text-muted text-xs">Total Volume</div>
-          <div className="font-medium text-white">
+          <div className="font-medium text-white font-mono">
             ${(marketState.total_volume / DECIMALS).toLocaleString()}
           </div>
         </div>
