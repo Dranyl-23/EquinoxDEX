@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 /**
  * Subscribes to ultra-high frequency sub-50ms real-time price updates via Binance @aggTrade WebSocket.
- * Outperforms standard DEX ticker polling for instant execution feedback.
+ * Includes pagehide & bfcache guards to prevent Chrome DevTools WebSocket warnings.
  */
 export function useLivePrice(symbol: string = 'BTCUSDT') {
   const [price, setPrice] = useState<number>(0);
@@ -13,6 +13,17 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
     let mounted = true;
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let isDestroyed = false;
+
+    const handlePageHide = () => {
+      isDestroyed = true;
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
 
     // 1. Initial REST fetch for instant price availability
     const fetchInitialPrice = async () => {
@@ -20,13 +31,13 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
         const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
         if (!res.ok) throw new Error('Failed to fetch initial price');
         const data = await res.json();
-        if (mounted && data.price) {
+        if (mounted && !isDestroyed && data.price) {
           setPrice(parseFloat(data.price));
           setLoading(false);
           setError(null);
         }
       } catch (err: unknown) {
-        if (mounted) {
+        if (mounted && !isDestroyed) {
           setError(err instanceof Error ? err.message : String(err));
           setLoading(false);
         }
@@ -35,46 +46,59 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
 
     fetchInitialPrice();
 
-    // 2. Connect Binance high-frequency @aggTrade WebSocket (sub-50ms updates)
+    // 2. Connect Binance high-frequency @aggTrade WebSocket
     const connectWs = () => {
-      const lowerSymbol = symbol.toLowerCase();
-      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSymbol}@aggTrade`);
+      if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          // aggTrade payload uses 'p' for price and 'q' for quantity
-          const rawPrice = data.p || data.c;
-          if (rawPrice) {
-            const p = parseFloat(rawPrice);
-            if (mounted && !isNaN(p)) {
-              setPrice(p);
-              setLoading(false);
-              setError(null);
+      try {
+        const lowerSymbol = symbol.toLowerCase();
+        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSymbol}@aggTrade`);
+
+        ws.onmessage = (event) => {
+          if (isDestroyed) return;
+          try {
+            const data = JSON.parse(event.data);
+            const rawPrice = data.p || data.c;
+            if (rawPrice) {
+              const p = parseFloat(rawPrice);
+              if (mounted && !isNaN(p)) {
+                setPrice(p);
+                setLoading(false);
+                setError(null);
+              }
             }
+          } catch {
+            // ignore parsing error
           }
-        } catch {
-          // ignore parsing error
-        }
-      };
+        };
 
-      ws.onerror = () => {
-        ws?.close();
-      };
+        ws.onerror = () => {
+          if (ws) {
+            try { ws.close(); } catch {}
+          }
+        };
 
-      ws.onclose = () => {
-        if (mounted) {
-          reconnectTimer = setTimeout(connectWs, 2000);
-        }
-      };
+        ws.onclose = () => {
+          if (mounted && !isDestroyed && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
+            reconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+      } catch {
+        // ignore ws error
+      }
     };
 
     connectWs();
 
     return () => {
       mounted = false;
+      isDestroyed = true;
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) ws.close();
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
     };
   }, [symbol]);
 

@@ -64,19 +64,31 @@ export const TradingChart = () => {
     };
   }, []);
 
-  // Fetch Initial Data and connect WebSocket for selected interval
+  // Fetch Initial Data and connect WebSocket for selected interval with bfcache guard
   useEffect(() => {
     if (!seriesRef.current) return;
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let isDestroyed = false;
+
+    const handlePageHide = () => {
+      isDestroyed = true;
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
 
     const loadData = async () => {
       try {
         setError(null);
-        // 1. Fetch REST Data for selected interval
         const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${selectedInterval}&limit=1000`);
         const raw = await res.json();
         
+        if (isDestroyed) return;
+
         const formatted: CandlestickData<Time>[] = raw.map((d: (number | string)[]) => ({
           time: (Number(d[0]) / 1000) as Time,
           open: parseFloat(d[1] as string),
@@ -87,16 +99,19 @@ export const TradingChart = () => {
 
         seriesRef.current?.setData(formatted);
 
-        // 2. Connect WebSocket for selected timeframe interval
+        // Connect WebSocket for selected timeframe interval
         const connectWs = () => {
+          if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
+
           try {
             ws = new WebSocket(`wss://stream.binance.com:9443/ws/btcusdt@kline_${selectedInterval}`);
             
             ws.onopen = () => {
-              setWsConnected(true);
+              if (!isDestroyed) setWsConnected(true);
             };
 
             ws.onmessage = (event) => {
+              if (isDestroyed) return;
               try {
                 const message = JSON.parse(event.data);
                 if (message.e === 'kline' && seriesRef.current) {
@@ -116,13 +131,15 @@ export const TradingChart = () => {
             };
 
             ws.onclose = () => {
+              if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
               setWsConnected(false);
               reconnectTimer = setTimeout(connectWs, 3000);
             };
 
             ws.onerror = () => {
-              setWsConnected(false);
-              ws?.close();
+              if (ws) {
+                try { ws.close(); } catch {}
+              }
             };
           } catch {
             setWsConnected(false);
@@ -132,15 +149,20 @@ export const TradingChart = () => {
         connectWs();
 
       } catch {
-        setError("Failed to load chart data.");
+        if (!isDestroyed) setError("Failed to load chart data.");
       }
     };
     
     void loadData();
 
     return () => {
+      isDestroyed = true;
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) ws.close();
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
     };
   }, [selectedInterval]);
 

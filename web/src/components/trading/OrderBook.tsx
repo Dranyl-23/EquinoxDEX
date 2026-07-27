@@ -22,16 +22,30 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
   const [trades, setTrades] = useState<TradeEntry[]>([]);
   const maxTotalRef = useRef<number>(1);
 
-  // 1. High-frequency 100ms Orderbook Depth Stream
+  // 1. High-frequency 100ms Orderbook Depth Stream with bfcache guard
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let isDestroyed = false;
+
+    const handlePageHide = () => {
+      isDestroyed = true;
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
 
     const connectDepthWs = () => {
+      if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
+
       try {
         ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@depth10@100ms');
 
         ws.onmessage = (event) => {
+          if (isDestroyed) return;
           try {
             const data = JSON.parse(event.data);
             if (data.bids && data.asks) {
@@ -49,7 +63,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
                 const size = parseFloat(a[1]);
                 askTotal += size;
                 return { price, size, total: askTotal };
-              }).reverse(); // Order asks ascending for top render
+              }).reverse();
 
               maxTotalRef.current = Math.max(bidTotal, askTotal, 1);
               setBids(formattedBids);
@@ -61,34 +75,57 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         };
 
         ws.onclose = () => {
-          reconnectTimer = setTimeout(connectDepthWs, 2000);
+          if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
+          reconnectTimer = setTimeout(connectDepthWs, 3000);
         };
+
         ws.onerror = () => {
-          ws?.close();
+          if (ws) {
+            try { ws.close(); } catch {}
+          }
         };
       } catch {
-        // ignore ws errors
+        // ignore ws instantiation errors
       }
     };
 
     connectDepthWs();
 
     return () => {
+      isDestroyed = true;
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) ws.close();
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
     };
   }, []);
 
-  // 2. Sub-50ms Real-time Trade Execution Stream
+  // 2. Sub-50ms Real-time Trade Execution Stream with bfcache guard
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let isDestroyed = false;
+
+    const handlePageHide = () => {
+      isDestroyed = true;
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
 
     const connectTradeWs = () => {
+      if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
+
       try {
         ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
 
         ws.onmessage = (event) => {
+          if (isDestroyed) return;
           try {
             const data = JSON.parse(event.data);
             if (data && data.p && data.q) {
@@ -97,7 +134,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
                 price: parseFloat(data.p),
                 size: parseFloat(data.q),
                 time: new Date(data.T).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                side: data.m ? 'sell' : 'buy', // m is true if buyer is market maker
+                side: data.m ? 'sell' : 'buy',
               };
 
               setTrades((prev) => [newTrade, ...prev.slice(0, 25)]);
@@ -108,10 +145,14 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         };
 
         ws.onclose = () => {
-          reconnectTimer = setTimeout(connectTradeWs, 2000);
+          if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
+          reconnectTimer = setTimeout(connectTradeWs, 3000);
         };
+
         ws.onerror = () => {
-          ws?.close();
+          if (ws) {
+            try { ws.close(); } catch {}
+          }
         };
       } catch {
         // ignore ws error
@@ -121,8 +162,13 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
     connectTradeWs();
 
     return () => {
+      isDestroyed = true;
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) ws.close();
+      if (ws) {
+        try { ws.close(); } catch {}
+      }
     };
   }, []);
 
