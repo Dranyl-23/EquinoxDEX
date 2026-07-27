@@ -54,13 +54,13 @@ export const MarketSelectorModal: React.FC<MarketSelectorModalProps> = ({
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <span className="text-xl">🌐</span>
-              <h2 className="font-bold text-white text-lg tracking-tight">Select Market</h2>
-              <span className="text-xs font-mono bg-brand/20 text-brand px-2 py-0.5 rounded-full font-bold">
+              <h2 className="font-bold text-white text-base sm:text-lg tracking-tight whitespace-nowrap">Select Market</h2>
+              <span className="text-[10px] sm:text-xs font-mono bg-brand/20 text-brand px-2 py-0.5 rounded-full font-bold whitespace-nowrap">
                 {MARKETS.length} Pairs
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] text-muted font-mono bg-background px-2 py-1 rounded border border-border/60">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="hidden sm:inline-block text-[11px] text-muted font-mono bg-background px-2 py-1 rounded border border-border/60 whitespace-nowrap">
                 <kbd>Ctrl</kbd> + <kbd>K</kbd>
               </span>
               <button 
