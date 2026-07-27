@@ -118,7 +118,7 @@ export function MarketHeader({
       <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full md:w-auto justify-between md:justify-start">
         {/* App Logo */}
         <div className="flex items-center gap-2 mr-1 sm:mr-3">
-          <TokenLogo id="EQX-PERP" />
+          <img src="/equinox_logo.png" alt="Equinox DEX" className="w-10 h-10 mix-blend-screen rounded-xl" />
           <span className="font-bold text-white text-xl tracking-tight hidden lg:block">Equinox</span>
         </div>
 
