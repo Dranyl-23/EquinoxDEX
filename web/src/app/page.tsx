@@ -13,6 +13,7 @@ import {
   buildClosePositionXDR,
   buildTriggerOrdersXDR,
   buildPlaceLimitOrderXDR,
+  buildCancelLimitOrderXDR,
   contractConfigured,
   buildDepositMarginXDR,
   buildWithdrawMarginXDR,
@@ -225,6 +226,24 @@ export default function Home() {
     }
   };
 
+  const handleCancelOrder = async (orderIndex: number) => {
+    if (!publicKey) return;
+    setIsSubmitting(true);
+    try {
+      const sessionKey = getSessionKey();
+      const caller = sessionKey?.publicKey ?? publicKey;
+      const xdr = await buildCancelLimitOrderXDR(caller, publicKey, orderIndex);
+      await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
+
+      const orders = await readLimitOrders(publicKey);
+      setLimitOrders(orders);
+    } catch (e: unknown) {
+      alert(`Cancel Order Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleToggle1Click = async () => {
     if (!publicKey) return;
     if (is1ClickEnabled) {
@@ -308,6 +327,7 @@ export default function Home() {
             onClosePosition={handleClosePosition}
             onTriggerKeeper={handleTriggerKeeper}
             onSharePnL={() => setShowShareCard(true)}
+            onCancelOrder={handleCancelOrder}
           />
         </div>
 

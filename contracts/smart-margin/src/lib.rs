@@ -54,6 +54,7 @@ pub enum DataKey {
     GlobalLeaderboard,
     SessionKey(Address),
     MarginBalance(Address),
+    InsuranceFundBalance,
 }
 
 #[contracterror]
@@ -463,10 +464,17 @@ impl SmartMarginContract {
         env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &bal);
         env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
 
-        // Add fee to the pool balance for Auto-Compounding
+        // Task #11: 10% of opening fee goes to Insurance Fund for bad debt socialization
+        let insurance_cut = open_fee / 10;
+        let pool_cut = open_fee - insurance_cut;
+
         let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
-        pool_bal += open_fee;
+        pool_bal += pool_cut;
         env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
+
+        let mut ins_bal: i128 = env.storage().instance().get(&DataKey::InsuranceFundBalance).unwrap_or(0);
+        ins_bal += insurance_cut;
+        env.storage().instance().set(&DataKey::InsuranceFundBalance, &ins_bal);
 
         let position = Position {
             margin, // Conceptually the "initial margin required"
@@ -479,7 +487,7 @@ impl SmartMarginContract {
             trailing_stop_distance,
         };
         env.storage().persistent().set(&DataKey::Position(user.clone()), &position);
-        env.storage().persistent().extend_ttl(&DataKey::Position(user), 10_000, 100_000);
+        env.storage().persistent().extend_ttl(&DataKey::Position(user.clone()), 10_000, 100_000);
 
         let mut total_volume: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
         total_volume += position_size;
@@ -494,6 +502,9 @@ impl SmartMarginContract {
             total_short += position_size;
             env.storage().instance().set(&DataKey::TotalShortOI, &total_short);
         }
+
+        // Task #7: Emits pos_open event
+        env.events().publish((Symbol::new(&env, "pos_open"), user), (margin, leverage, is_long, entry_price));
 
         Ok(())
     }
@@ -523,8 +534,26 @@ impl SmartMarginContract {
         let mut orders: soroban_sdk::Vec<Order> = env.storage().persistent().get(&DataKey::LimitOrders(user.clone())).unwrap_or(soroban_sdk::Vec::new(&env));
         orders.push_back(order);
         env.storage().persistent().set(&DataKey::LimitOrders(user.clone()), &orders);
-        env.storage().persistent().extend_ttl(&DataKey::LimitOrders(user), 10_000, 100_000);
+        env.storage().persistent().extend_ttl(&DataKey::LimitOrders(user.clone()), 10_000, 100_000);
         
+        // Event #7: OrderPlaced
+        env.events().publish((Symbol::new(&env, "order_place"), user), (trigger_price, is_long, margin, leverage));
+        
+        Ok(())
+    }
+
+    pub fn cancel_limit_order(env: Env, caller: Address, user: Address, index: u32) -> Result<(), Error> {
+        Self::verify_caller(&env, &user, &caller)?;
+        let mut orders: soroban_sdk::Vec<Order> = env.storage().persistent().get(&DataKey::LimitOrders(user.clone())).unwrap_or(soroban_sdk::Vec::new(&env));
+        if (index as u32) >= orders.len() {
+            return Err(Error::InvalidMargin);
+        }
+        orders.remove(index);
+        env.storage().persistent().set(&DataKey::LimitOrders(user.clone()), &orders);
+        env.storage().persistent().extend_ttl(&DataKey::LimitOrders(user.clone()), 10_000, 100_000);
+        
+        // Event #7: OrderCancelled
+        env.events().publish((Symbol::new(&env, "order_cancel"), user), index);
         Ok(())
     }
 
@@ -640,23 +669,22 @@ impl SmartMarginContract {
                 updated = true;
             }
         }
-        
         if updated {
             env.storage().persistent().set(&DataKey::Position(user), &position);
         }
         Ok(())
     }
 
-    fn internal_close_position(env: &Env, user: &Address, margin_to_close: i128) -> Result<i128, Error> {
-        let position: Position = env.storage().persistent().get(&DataKey::Position(user.clone())).ok_or(Error::NoPosition)?;
-        if position.entry_price <= 0 {
-            return Err(Error::InvalidMargin);
+    fn internal_close_position(env: &Env, user: &Address, margin_to_close: i128, keeper_opt: Option<&Address>) -> Result<i128, Error> {
+        let position_opt: Option<Position> = env.storage().persistent().get(&DataKey::Position(user.clone()));
+        if position_opt.is_none() {
+            return Err(Error::NoPosition);
         }
+        let position = position_opt.unwrap();
         let current_price = Self::fetch_price(env)?;
-        
-        Self::update_funding(env);
+
         let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
-        
+
         let mut actual_margin_to_close = margin_to_close;
         if actual_margin_to_close <= 0 || actual_margin_to_close > position.margin {
             actual_margin_to_close = position.margin;
@@ -681,38 +709,71 @@ impl SmartMarginContract {
 
         let close_fee = position_size / 1000; // 0.1% closing fee (in USDC value)
 
-        // BUG FIX C3: Separate trader_pnl (without fee) from pool accounting
-        // trader receives: pnl + funding_pnl - close_fee
-        // pool pays: pnl + funding_pnl (the raw P&L), and receives close_fee separately
+        // Task #11: Insurance fund receives 10% of closing fee
+        let ins_fee_cut = close_fee / 10;
+        let pool_fee_cut = close_fee - ins_fee_cut;
+
         let trader_pnl = pnl + funding_pnl - close_fee;
 
-        // BUG FIX C2: Pool accounting — pool pays raw PnL, receives close_fee once (not twice)
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
         let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
-        // Pool absorbs the raw PnL (negative = pool gains, positive = pool pays)
         let raw_pnl = pnl + funding_pnl;
         pool_bal -= raw_pnl;
-        // Pool receives the close fee once (not double-counted)
-        pool_bal += close_fee;
+        pool_bal += pool_fee_cut;
 
-        // BUG FIX C2 (insolvency): If pool cannot cover payout, cap trader profit
-        // to available pool balance to prevent phantom USDC credits
+        let mut ins_bal: i128 = env.storage().instance().get(&DataKey::InsuranceFundBalance).unwrap_or(0);
+        ins_bal += ins_fee_cut;
+
         let mut actual_trader_pnl = trader_pnl;
         if pool_bal < 0 {
-            // Pool is insolvent — reduce trader profit by the deficit
-            actual_trader_pnl += pool_bal; // pool_bal is negative, so this reduces profit
+            actual_trader_pnl += pool_bal;
             pool_bal = 0;
         }
 
         let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
-        bal += actual_trader_pnl;
-        if bal < 0 {
-            bal = 0; // Liquidated or negative balance absorbed by pool
+        let new_bal_raw = bal + actual_trader_pnl;
+        
+        // Task #11: Bad Debt Socialization — if equity < 0, cover deficit from Insurance Fund
+        if new_bal_raw < 0 {
+            let bad_debt = -new_bal_raw;
+            if ins_bal >= bad_debt {
+                ins_bal -= bad_debt;
+            } else {
+                let remaining_deficit = bad_debt - ins_bal;
+                ins_bal = 0;
+                if pool_bal >= remaining_deficit {
+                    pool_bal -= remaining_deficit;
+                } else {
+                    pool_bal = 0;
+                }
+            }
+            bal = 0;
+        } else {
+            bal = new_bal_raw;
         }
+
+        // Task #9: Keeper Liquidation Bounty (1.5% of position margin paid to keeper)
+        if let Some(keeper) = keeper_opt {
+            if keeper != user {
+                let keeper_reward = (position.margin * 15) / 1000;
+                if bal >= keeper_reward {
+                    bal -= keeper_reward;
+                    let mut keeper_bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(keeper.clone())).unwrap_or(0);
+                    keeper_bal += keeper_reward;
+                    env.storage().persistent().set(&DataKey::MarginBalance(keeper.clone()), &keeper_bal);
+                    env.storage().persistent().extend_ttl(&DataKey::MarginBalance(keeper.clone()), 10_000, 100_000);
+                    
+                    // Task #7: Emits liquidate event
+                    env.events().publish((Symbol::new(env, "liquidate"), user.clone()), (keeper.clone(), keeper_reward));
+                }
+            }
+        }
+
         env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &bal);
         env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
 
         env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
+        env.storage().instance().set(&DataKey::InsuranceFundBalance, &ins_bal);
         
         if actual_margin_to_close == position.margin {
             env.storage().persistent().remove(&DataKey::Position(user.clone()));
@@ -723,7 +784,6 @@ impl SmartMarginContract {
             env.storage().persistent().extend_ttl(&DataKey::Position(user.clone()), 10_000, 100_000);
         }
 
-        // M2 FIX: Use saturating_sub to prevent Open Interest underflow corruption
         if position.is_long {
             let total_long: i128 = env.storage().instance().get(&DataKey::TotalLongOI).unwrap_or(0);
             let updated_long = total_long.saturating_sub(position_size);
@@ -739,17 +799,19 @@ impl SmartMarginContract {
         env.storage().persistent().set(&DataKey::UserTotalPnL(user.clone()), &total_pnl);
         env.storage().persistent().extend_ttl(&DataKey::UserTotalPnL(user.clone()), 10_000, 100_000);
         
-        // M15 FIX: Conditional leaderboard update
         if actual_trader_pnl != 0 {
             Self::update_leaderboard(env, user.clone(), total_pnl);
         }
+
+        // Task #7: Emits pos_close event
+        env.events().publish((Symbol::new(env, "pos_close"), user.clone()), (actual_margin_to_close, actual_trader_pnl));
 
         Ok(actual_trader_pnl)
     }
 
     pub fn close_position(env: Env, caller: Address, user: Address, margin_to_close: i128) -> Result<i128, Error> {
         Self::verify_caller(&env, &user, &caller)?;
-        Self::internal_close_position(&env, &user, margin_to_close)
+        Self::internal_close_position(&env, &user, margin_to_close, None)
     }
 
     pub fn trigger_orders(env: Env, caller: Address, user: Address) -> Result<i128, Error> {
@@ -809,8 +871,8 @@ impl SmartMarginContract {
         }
 
         if should_trigger {
-            caller.require_auth(); // H1 FIX: Keeper/liquidator authorizes transaction, user auth bypassed!
-            return Self::internal_close_position(&env, &user, position.margin);
+            caller.require_auth();
+            return Self::internal_close_position(&env, &user, position.margin, Some(&caller));
         }
         
         if executed_limits > 0 {

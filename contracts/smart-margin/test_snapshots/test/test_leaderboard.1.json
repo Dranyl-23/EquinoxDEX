@@ -1721,6 +1721,21 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "InsuranceFundBalance"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "i128": {
+                            "hi": 0,
+                            "lo": 8000000
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "LastFundingTime"
                             }
                           ]
@@ -1755,7 +1770,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 97989090909
+                            "lo": 97981090909
                           }
                         }
                       },

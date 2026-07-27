@@ -16,6 +16,7 @@ interface PositionsTableProps {
   onClosePosition: (pct?: number) => Promise<void>;
   onTriggerKeeper: () => Promise<void>;
   onSharePnL: () => void;
+  onCancelOrder?: (index: number) => Promise<void>;
 }
 
 export const PositionsTable: React.FC<PositionsTableProps> = ({
@@ -31,6 +32,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   onClosePosition,
   onTriggerKeeper,
   onSharePnL,
+  onCancelOrder,
 }) => {
   const [activeTab, setActiveTab] = useState<'positions' | 'orders'>('positions');
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -85,6 +87,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                   <th className="px-4 py-2.5 font-semibold">Size</th>
                   <th className="px-4 py-2.5 font-semibold">Margin</th>
                   <th className="px-4 py-2.5 font-semibold">Entry Price</th>
+                  <th className="px-4 py-2.5 font-semibold text-danger/90">Liq. Price</th>
                   <th className="px-4 py-2.5 font-semibold">TP / SL</th>
                   <th className="px-4 py-2.5 font-semibold">PnL</th>
                   <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
@@ -93,19 +96,26 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
               <tbody className="divide-y divide-border/40">
                 {!publicKey ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted">
+                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
                       Connect wallet to view positions.
                     </td>
                   </tr>
                 ) : !position && !pendingPosition ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted">
+                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
                       No open positions yet.
                     </td>
                   </tr>
                 ) : (
                   <>
-                    {position && (
+                    {position && (() => {
+                      const entryUsd = position.entry_price / DECIMALS;
+                      const liqFrac = 0.98 / position.leverage;
+                      const liqPrice = position.is_long 
+                        ? entryUsd * (1 - liqFrac)
+                        : entryUsd * (1 + liqFrac);
+
+                      return (
                       <tr className="hover:bg-panel/30 transition-colors">
                         <td className="px-4 py-3">
                           <span className="font-bold text-white">EQX-PERP</span>
@@ -116,6 +126,9 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                         <td className="px-4 py-3 font-mono">{currentPrice > 0 ? ((position.margin / DECIMALS) * position.leverage / currentPrice).toFixed(4) : "..."} BTC</td>
                         <td className="px-4 py-3 font-mono">{position.margin / DECIMALS} USDC</td>
                         <td className="px-4 py-3 font-mono">${(position.entry_price / DECIMALS).toLocaleString()}</td>
+                        <td className="px-4 py-3 font-mono text-danger font-semibold" title="Cross-Margin Liquidation Trigger Price">
+                          ${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
                         <td className="px-4 py-3 font-mono text-xs text-muted">
                           {position.take_profit > 0 ? <span className="text-brand">TP: ${(position.take_profit / DECIMALS).toLocaleString()}</span> : 'No TP'}<br/>
                           {position.stop_loss > 0 ? <span className="text-danger">SL: ${(position.stop_loss / DECIMALS).toLocaleString()}</span> : 'No SL'}
@@ -164,7 +177,8 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                           </div>
                         </td>
                       </tr>
-                    )}
+                      );
+                    })()}
                     {pendingPosition && (
                       <tr className="bg-panel/30 animate-pulse">
                         <td className="px-4 py-3">
@@ -178,6 +192,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                         </td>
                         <td className="px-4 py-3 font-mono text-muted">{pendingPosition.margin / DECIMALS} USDC</td>
                         <td className="px-4 py-3 font-mono text-muted">Opening...</td>
+                        <td className="px-4 py-3 font-mono text-muted text-xs">Computing...</td>
                         <td className="px-4 py-3 font-mono text-xs text-muted">
                           {pendingPosition.take_profit > 0 ? <span className="text-brand/50">TP: ${(pendingPosition.take_profit / DECIMALS).toLocaleString()}</span> : 'No TP'}<br/>
                           {pendingPosition.stop_loss > 0 ? <span className="text-danger/50">SL: ${(pendingPosition.stop_loss / DECIMALS).toLocaleString()}</span> : 'No SL'}
@@ -198,18 +213,19 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                   <th className="px-4 py-2.5 font-semibold">Size</th>
                   <th className="px-4 py-2.5 font-semibold">Trigger Price</th>
                   <th className="px-4 py-2.5 font-semibold">TP / SL</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
                 {!publicKey ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-12 text-center text-sm text-muted">
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted">
                       Connect wallet to view limit orders.
                     </td>
                   </tr>
                 ) : limitOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-12 text-center text-sm text-muted">
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted">
                       No open limit orders.
                     </td>
                   </tr>
@@ -226,6 +242,17 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                       <td className="px-4 py-3 font-mono text-xs text-muted">
                         {order.take_profit > 0 ? <span className="text-brand">TP: ${(order.take_profit / DECIMALS).toLocaleString()}</span> : 'No TP'}<br/>
                         {order.stop_loss > 0 ? <span className="text-danger">SL: ${(order.stop_loss / DECIMALS).toLocaleString()}</span> : 'No SL'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {onCancelOrder && (
+                          <button
+                            onClick={() => onCancelOrder(idx)}
+                            disabled={isSubmitting}
+                            className="bg-panel border border-border/80 hover:bg-danger/20 hover:text-danger hover:border-danger/40 text-xs px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))

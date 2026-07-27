@@ -434,6 +434,36 @@ export async function buildRemoveLiquidityXDR(sender: string, tokenAddress: stri
   return rpc.assembleTransaction(tx, sim).build().toXDR();
 }
 
+/**
+ * Build + simulate + assemble an unsigned `cancel_limit_order` invocation.
+ */
+export async function buildCancelLimitOrderXDR(caller: string, user: string, orderIndex: number): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(caller);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'cancel_limit_order',
+        new Address(caller).toScVal(),
+        new Address(user).toScVal(),
+        nativeToScVal(orderIndex, { type: 'u32' })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed to cancel limit order.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
 export interface LeaderboardEntry {
   user: string;
   total_pnl: number;

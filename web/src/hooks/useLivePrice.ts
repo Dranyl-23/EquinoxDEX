@@ -46,6 +46,19 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
 
     fetchInitialPrice();
 
+    let attemptCount = 0;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mounted && !isDestroyed) {
+        if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+          attemptCount = 0;
+          connectWs();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // 2. Connect Binance high-frequency @aggTrade WebSocket
     const connectWs = () => {
       if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
@@ -53,6 +66,10 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
       try {
         const lowerSymbol = symbol.toLowerCase();
         ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSymbol}@aggTrade`);
+
+        ws.onopen = () => {
+          attemptCount = 0;
+        };
 
         ws.onmessage = (event) => {
           if (isDestroyed) return;
@@ -80,7 +97,9 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
 
         ws.onclose = () => {
           if (mounted && !isDestroyed && typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
-            reconnectTimer = setTimeout(connectWs, 3000);
+            attemptCount++;
+            const delay = Math.min(1000 * Math.pow(2, attemptCount), 30000);
+            reconnectTimer = setTimeout(connectWs, delay);
           }
         };
       } catch {
@@ -93,6 +112,7 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
     return () => {
       mounted = false;
       isDestroyed = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handlePageHide);
       if (reconnectTimer) clearTimeout(reconnectTimer);

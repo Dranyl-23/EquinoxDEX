@@ -1312,12 +1312,27 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "InsuranceFundBalance"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "i128": {
+                            "hi": 0,
+                            "lo": 4000000
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "LastFundingTime"
                             }
                           ]
                         },
                         "val": {
-                          "u64": 1200
+                          "u64": 1100
                         }
                       },
                       {
@@ -1346,7 +1361,7 @@
                         "val": {
                           "i128": {
                             "hi": 0,
-                            "lo": 100140000000
+                            "lo": 100136000000
                           }
                         }
                       },
@@ -1945,5 +1960,42 @@
       ]
     ]
   },
-  "events": []
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000006",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "pos_close"
+              },
+              {
+                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 1000000000
+                  }
+                },
+                {
+                  "i128": {
+                    "hi": -1,
+                    "lo": 18446744073699551616
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
 }
