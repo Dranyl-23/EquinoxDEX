@@ -17,6 +17,8 @@ import { server, NETWORK_PASSPHRASE, CONTRACT_ID } from './stellar';
 const READ_SOURCE = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
 export interface Position {
+  id: number;
+  symbol: string;
   margin: number;
   leverage: number;
   entry_price: number;
@@ -72,8 +74,8 @@ export async function readMarketState(): Promise<{ long_oi: number; short_oi: nu
   }
 }
 
-/** Read position via simulation — no wallet or signature required. */
-export async function readPosition(userAddress: string): Promise<Position | null> {
+/** Read positions array via simulation — no wallet or signature required. */
+export async function readPositions(userAddress: string): Promise<Position[]> {
   try {
     const contract = new Contract(CONTRACT_ID);
     const source = new Account(READ_SOURCE, '0');
@@ -83,17 +85,19 @@ export async function readPosition(userAddress: string): Promise<Position | null
       networkPassphrase: NETWORK_PASSPHRASE,
     })
       .addOperation(
-        contract.call('get_position', new Address(userAddress).toScVal())
+        contract.call('get_positions', new Address(userAddress).toScVal())
       )
       .setTimeout(30)
       .build();
 
     const sim = await server.simulateTransaction(tx);
     if (!rpc.Api.isSimulationSuccess(sim) || !sim.result) {
-      return null;
+      return [];
     }
 
-    const pos = scValToNative(sim.result.retval) as {
+    const rawList = scValToNative(sim.result.retval) as Array<{
+      id: bigint;
+      symbol: string;
       margin: bigint;
       leverage: number;
       entry_price: bigint;
@@ -102,9 +106,11 @@ export async function readPosition(userAddress: string): Promise<Position | null
       stop_loss: bigint;
       funding_index_at_entry: bigint;
       trailing_stop_distance: bigint;
-    };
+    }>;
     
-    return {
+    return rawList.map(pos => ({
+      id: Number(pos.id),
+      symbol: typeof pos.symbol === 'string' ? pos.symbol : 'BTCUSDT',
       margin: Number(pos.margin),
       leverage: pos.leverage,
       entry_price: Number(pos.entry_price),
@@ -113,9 +119,9 @@ export async function readPosition(userAddress: string): Promise<Position | null
       stop_loss: Number(pos.stop_loss),
       funding_index_at_entry: Number(pos.funding_index_at_entry),
       trailing_stop_distance: Number(pos.trailing_stop_distance),
-    };
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -140,29 +146,25 @@ export async function readLimitOrders(userAddress: string): Promise<Order[]> {
       return [];
     }
 
-    const scVals = sim.result.retval.value() as unknown[];
-    if (!Array.isArray(scVals)) return [];
+    const rawList = scValToNative(sim.result.retval) as Array<{
+      margin: bigint;
+      leverage: number;
+      is_long: boolean;
+      trigger_price: bigint;
+      take_profit: bigint;
+      stop_loss: bigint;
+      trailing_stop_distance: bigint;
+    }>;
 
-    return scVals.map(val => {
-      const obj = scValToNative(val as never) as {
-        margin: bigint;
-        leverage: number;
-        is_long: boolean;
-        trigger_price: bigint;
-        take_profit: bigint;
-        stop_loss: bigint;
-        trailing_stop_distance: bigint;
-      };
-      return {
-        margin: Number(obj.margin),
-        leverage: obj.leverage,
-        is_long: obj.is_long,
-        trigger_price: Number(obj.trigger_price),
-        take_profit: Number(obj.take_profit),
-        stop_loss: Number(obj.stop_loss),
-        trailing_stop_distance: Number(obj.trailing_stop_distance),
-      };
-    });
+    return rawList.map(obj => ({
+      margin: Number(obj.margin),
+      leverage: obj.leverage,
+      is_long: obj.is_long,
+      trigger_price: Number(obj.trigger_price),
+      take_profit: Number(obj.take_profit),
+      stop_loss: Number(obj.stop_loss),
+      trailing_stop_distance: Number(obj.trailing_stop_distance),
+    }));
   } catch {
     return [];
   }
@@ -174,12 +176,13 @@ export async function readLimitOrders(userAddress: string): Promise<Order[]> {
 export async function buildOpenPositionXDR(
   caller: string,
   user: string,
-  margin: number, // Already scaled by 10^7
+  symbol: string,
+  margin: number,
   leverage: number,
   isLong: boolean,
-  takeProfit: number, // Scaled by 10^7
-  stopLoss: number,   // Scaled by 10^7
-  trailingStopDistance: number = 0 // Scaled by 10^7
+  takeProfit: number,
+  stopLoss: number,
+  trailingStopDistance: number = 0
 ): Promise<string> {
   const contract = new Contract(CONTRACT_ID);
   const account = await server.getAccount(caller);
@@ -193,6 +196,7 @@ export async function buildOpenPositionXDR(
         'open_position',
         new Address(caller).toScVal(),
         new Address(user).toScVal(),
+        nativeToScVal(symbol, { type: 'symbol' }),
         nativeToScVal(BigInt(Math.trunc(margin)), { type: 'i128' }),
         nativeToScVal(leverage, { type: 'u32' }),
         nativeToScVal(isLong, { type: 'bool' }),
@@ -207,7 +211,7 @@ export async function buildOpenPositionXDR(
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     console.error('Simulation failed', sim.error, sim.events);
-    throw new Error('Simulation failed — Check testnet balance or if position exists.');
+    throw new Error('Simulation failed — Check testnet balance.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();
@@ -216,7 +220,12 @@ export async function buildOpenPositionXDR(
 /**
  * Build + simulate + assemble an unsigned `close_position` invocation.
  */
-export async function buildClosePositionXDR(caller: string, user: string, marginToClose: number = 0): Promise<string> {
+export async function buildClosePositionXDR(
+  caller: string, 
+  user: string, 
+  positionId: number, 
+  marginToClose: number = 0
+): Promise<string> {
   const contract = new Contract(CONTRACT_ID);
   const account = await server.getAccount(caller);
 
@@ -229,6 +238,7 @@ export async function buildClosePositionXDR(caller: string, user: string, margin
         'close_position',
         new Address(caller).toScVal(),
         new Address(user).toScVal(),
+        nativeToScVal(positionId, { type: 'u64' }),
         nativeToScVal(BigInt(Math.trunc(marginToClose)), { type: 'i128' })
       )
     )
@@ -335,6 +345,46 @@ export async function buildUpdateTrailingStopXDR(sender: string): Promise<string
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     throw new Error('Trailing stop update simulation failed - likely no valid stop loss increase.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/**
+ * Build + simulate + assemble an unsigned `modify_tpsl` invocation.
+ */
+export async function buildModifyTpSlXDR(
+  caller: string,
+  user: string,
+  positionId: number,
+  takeProfit: number,
+  stopLoss: number,
+  trailingStopDistance: number = 0
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(caller);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'modify_tpsl',
+        new Address(caller).toScVal(),
+        new Address(user).toScVal(),
+        nativeToScVal(positionId, { type: 'u64' }),
+        nativeToScVal(BigInt(Math.trunc(takeProfit)), { type: 'i128' }),
+        nativeToScVal(BigInt(Math.trunc(stopLoss)), { type: 'i128' }),
+        nativeToScVal(BigInt(Math.trunc(trailingStopDistance)), { type: 'i128' })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed to modify TP/SL.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();

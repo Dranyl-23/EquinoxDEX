@@ -6,8 +6,10 @@ import { readPoolState, buildAddLiquidityXDR, buildRemoveLiquidityXDR, contractC
 import { signAndSubmit } from '@/lib/sign';
 import { USDC_TOKEN_ID, XLM_TOKEN_ID } from '@/lib/stellar';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
+import { useLanguage } from '@/components/LanguageProvider';
 
 export default function Portfolio() {
+  const { t, formatNum } = useLanguage();
   const wallet = useWalletContext();
   const { publicKey } = wallet;
   
@@ -118,29 +120,29 @@ export default function Portfolio() {
         
         {/* Header Section */}
         <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-3xl font-bold text-white">Liquidity Provider Vault</h2>
+          <h2 className="text-3xl font-bold text-white">{t('liquidityVault')}</h2>
           <p className="text-muted">Stake USDC to earn yield from trader losses, liquidations, and global funding rates.</p>
         </div>
 
         {/* Global Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Total Value Locked (TVL)</div>
+            <div className="text-sm text-muted mb-1">{t('totalValueLocked')}</div>
             <div className="text-2xl font-mono font-bold text-white">${tvl.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USD</span></div>
           </div>
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Estimated APR</div>
+            <div className="text-sm text-muted mb-1">{t('estimatedApr')}</div>
             <div className="text-2xl font-mono font-bold text-green-500">TBD</div>
             <div className="text-xs text-muted mt-1">Based on 7-day average</div>
           </div>
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Total Shares Minted</div>
+            <div className="text-sm text-muted mb-1">{t('totalSharesMinted')}</div>
             <div className="text-2xl font-mono font-bold text-white">{(poolState.totalShares / DECIMALS).toLocaleString()}</div>
           </div>
           <div className="bg-panel border border-border rounded-lg p-5 relative overflow-hidden">
             <div className="absolute inset-0 bg-brand/5 blur-xl"></div>
             <div className="relative">
-              <div className="text-sm text-brand font-semibold mb-1">Your Pool Share</div>
+              <div className="text-sm text-brand font-semibold mb-1">{t('yourPoolShare')}</div>
               <div className="text-2xl font-mono font-bold text-brand">{userSharePercent.toFixed(4)}%</div>
             </div>
           </div>

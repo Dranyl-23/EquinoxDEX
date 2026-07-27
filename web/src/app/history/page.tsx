@@ -62,7 +62,10 @@ const MOCK_HISTORY: TradeLog[] = [
   },
 ];
 
+import { useLanguage } from '@/components/LanguageProvider';
+
 export default function TradeHistoryPage() {
+  const { t, formatNum } = useLanguage();
   const wallet = useWalletContext();
   const { publicKey } = wallet;
   const [selectedAsset, setSelectedAsset] = useState<string>('ALL');
@@ -82,7 +85,7 @@ export default function TradeHistoryPage() {
         
         {/* Header */}
         <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-3xl font-bold text-white">Trade History & Audit</h2>
+          <h2 className="text-3xl font-bold text-white">{t('tradeLog')}</h2>
           <p className="text-muted">
             Lifetime trade audit logs, execution fill history, and performance statistics on EquinoxDEX.
           </p>
@@ -91,18 +94,18 @@ export default function TradeHistoryPage() {
         {/* Global Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Total Realized PnL</div>
+            <div className="text-sm text-muted mb-1">{t('realizedPnl')}</div>
             <div className="text-2xl font-mono font-bold text-green-500">+${totalRealizedPnl.toFixed(2)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Win Rate</div>
+            <div className="text-sm text-muted mb-1">{t('winRate')}</div>
             <div className="text-2xl font-mono font-bold text-white">{winRate}%</div>
             <div className="text-xs text-muted mt-1">{winningTrades} of {totalTrades} winning trades</div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Total Trades Executed</div>
+            <div className="text-sm text-muted mb-1">{t('totalTrades')}</div>
             <div className="text-2xl font-mono font-bold text-white">{totalTrades}</div>
           </div>
 
@@ -141,11 +144,11 @@ export default function TradeHistoryPage() {
               <thead>
                 <tr className="border-b border-border bg-background/50 text-muted text-xs uppercase tracking-wider font-mono">
                   <th className="py-4 px-6 font-semibold">Date & Time</th>
-                  <th className="py-4 px-6 font-semibold">Market</th>
+                  <th className="py-4 px-6 font-semibold">{t('market')}</th>
                   <th className="py-4 px-6 font-semibold">Type</th>
                   <th className="py-4 px-6 font-semibold">Entry / Exit</th>
-                  <th className="py-4 px-6 font-semibold">Margin Used</th>
-                  <th className="py-4 px-6 font-semibold">Realized PnL</th>
+                  <th className="py-4 px-6 font-semibold">{t('margin')}</th>
+                  <th className="py-4 px-6 font-semibold">{t('realizedPnl')}</th>
                   <th className="py-4 px-6 font-semibold text-right">Soroban TX</th>
                 </tr>
               </thead>

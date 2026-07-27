@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
+import { useLanguage } from '../LanguageProvider';
 
 interface OrderBookEntry {
   price: number;
@@ -15,7 +16,8 @@ interface TradeEntry {
   side: 'buy' | 'sell';
 }
 
-export function OrderBook({ currentPrice }: { currentPrice: number }) {
+export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: number; symbol?: string }) {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'book' | 'trades'>('book');
   const [bids, setBids] = useState<OrderBookEntry[]>([]);
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -42,7 +44,8 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
       if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
 
       try {
-        ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@depth10@100ms');
+        const lowerSym = symbol.toLowerCase();
+        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSym}@depth10@100ms`);
 
         ws.onmessage = (event) => {
           if (isDestroyed) return;
@@ -100,9 +103,9 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         try { ws.close(); } catch {}
       }
     };
-  }, []);
+  }, [symbol]);
 
-  // 2. Sub-50ms Real-time Trade Execution Stream with bfcache guard
+  // 2. Real-Time Public Trades Stream
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
@@ -122,25 +125,26 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
       if (isDestroyed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) return;
 
       try {
-        ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+        const lowerSym = symbol.toLowerCase();
+        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSym}@trade`);
 
         ws.onmessage = (event) => {
           if (isDestroyed) return;
           try {
             const data = JSON.parse(event.data);
-            if (data && data.p && data.q) {
-              const newTrade: TradeEntry = {
-                id: data.t,
-                price: parseFloat(data.p),
-                size: parseFloat(data.q),
-                time: new Date(data.T).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                side: data.m ? 'sell' : 'buy',
-              };
-
-              setTrades((prev) => [newTrade, ...prev.slice(0, 25)]);
+            if (data.p && data.q) {
+              const price = parseFloat(data.p);
+              const size = parseFloat(data.q);
+              const side: 'buy' | 'sell' = data.m ? 'sell' : 'buy';
+              const timeStr = new Date(data.T).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              
+              setTrades((prev) => [
+                { id: data.t || Date.now(), price, size, time: timeStr, side },
+                ...prev.slice(0, 24),
+              ]);
             }
           } catch {
-            // ignore parse error
+            // ignore
           }
         };
 
@@ -170,7 +174,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         try { ws.close(); } catch {}
       }
     };
-  }, []);
+  }, [symbol]);
 
   const spread = asks.length > 0 && bids.length > 0
     ? (asks[asks.length - 1].price - bids[0].price).toFixed(2)
@@ -186,7 +190,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
             activeTab === 'book' ? 'bg-brand/20 text-brand font-bold' : 'text-muted hover:text-white'
           }`}
         >
-          Order Book
+          {t('orderBook') || 'Order Book'}
         </button>
         <button
           onClick={() => setActiveTab('trades')}
@@ -194,7 +198,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
             activeTab === 'trades' ? 'bg-brand/20 text-brand font-bold' : 'text-muted hover:text-white'
           }`}
         >
-          Recent Trades
+          {t('trades') || 'Recent Trades'}
         </button>
       </div>
 
@@ -203,8 +207,8 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
           {/* Asks (Sells) */}
           <div className="flex flex-col gap-0.5 justify-end flex-1">
             <div className="flex justify-between text-[10px] text-muted pb-1 font-sans border-b border-border/30">
-              <span>Price ($)</span>
-              <span>Size (BTC)</span>
+              <span>{t('priceUsdc') ? t('priceUsdc').replace('USDC', '$') : 'Price ($)'}</span>
+              <span>{t('size') || 'Size'} (BTC)</span>
             </div>
             {asks.map((entry, idx) => {
               const depthPct = Math.min(100, (entry.total / maxTotalRef.current) * 100);
@@ -226,7 +230,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
             <span className="text-sm font-bold text-white">
               ${currentPrice > 0 ? currentPrice.toFixed(2) : '...'}
             </span>
-            <span className="text-[10px] text-muted font-sans">Spread: ${spread}</span>
+            <span className="text-[10px] text-muted font-sans">{t('spread') || 'Spread'}: ${spread}</span>
           </div>
 
           {/* Bids (Buys) */}
@@ -250,17 +254,17 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         /* Recent Trades Stream */
         <div className="flex-1 flex flex-col p-2 overflow-y-auto gap-1">
           <div className="flex justify-between text-[10px] text-muted pb-1 font-sans border-b border-border/30">
-            <span>Price ($)</span>
-            <span>Size (BTC)</span>
+            <span>{t('priceUsdc') ? t('priceUsdc').replace('USDC', '$') : 'Price ($)'}</span>
+            <span>{t('size') || 'Size'}</span>
             <span>Time</span>
           </div>
-          {trades.map((t) => (
-            <div key={t.id} className="flex justify-between items-center py-0.5 px-1 text-[11px] animate-fadeIn">
-              <span className={`font-medium ${t.side === 'buy' ? 'text-emerald-400' : 'text-danger'}`}>
-                {t.price.toFixed(2)}
+          {trades.map((tr) => (
+            <div key={tr.id} className="flex justify-between items-center py-0.5 px-1 text-[11px] animate-fadeIn">
+              <span className={`font-medium ${tr.side === 'buy' ? 'text-emerald-400' : 'text-danger'}`}>
+                ${tr.price.toFixed(2)}
               </span>
-              <span className="text-white">{t.size.toFixed(4)}</span>
-              <span className="text-muted text-[10px]">{t.time}</span>
+              <span className="text-muted font-mono">{tr.size.toFixed(4)}</span>
+              <span className="text-[10px] text-muted/70">{tr.time}</span>
             </div>
           ))}
         </div>

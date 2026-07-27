@@ -3,6 +3,9 @@ import "./globals.css";
 import { WalletProvider } from "@/components/WalletProvider";
 import Navbar from "@/components/Navbar";
 import { NetworkBanner } from "@/components/NetworkBanner";
+import { ToastProvider } from "@/components/Toast";
+import { LanguageProvider } from "@/components/LanguageProvider";
+import { SettingsProvider } from "@/components/SettingsProvider";
 
 export const metadata: Metadata = {
   title: "EquinoxDEX | Next-Gen Cross-Margin Perpetual DEX",
@@ -21,9 +24,15 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-brand selection:text-white font-sans">
         <WalletProvider>
-          <NetworkBanner />
-          <Navbar />
-          {children}
+          <LanguageProvider>
+            <SettingsProvider>
+              <ToastProvider>
+                <NetworkBanner />
+                <Navbar />
+                {children}
+              </ToastProvider>
+            </SettingsProvider>
+          </LanguageProvider>
         </WalletProvider>
       </body>
     </html>

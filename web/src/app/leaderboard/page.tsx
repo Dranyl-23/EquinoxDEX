@@ -3,8 +3,10 @@ import { useState, useEffect } from 'react';
 import { useWalletContext } from '@/components/WalletProvider';
 import { readLeaderboard, readUserPnL, LeaderboardEntry } from '@/lib/contract';
 import { DECIMALS } from '@/lib/constants';
+import { useLanguage } from '@/components/LanguageProvider';
 
 export default function Leaderboard() {
+  const { t, formatNum } = useLanguage();
   const wallet = useWalletContext();
   const { publicKey } = wallet;
   
@@ -48,7 +50,7 @@ export default function Leaderboard() {
         
         {/* Header */}
         <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-3xl font-bold text-white">Global Leaderboard</h2>
+          <h2 className="text-3xl font-bold text-white">{t('leaderboard')}</h2>
           <p className="text-muted">
             The top 10 most profitable traders on EquinoxDEX. PnL is tracked permanently on-chain in the Soroban smart contract.
           </p>
@@ -61,9 +63,9 @@ export default function Leaderboard() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border bg-background/50 text-muted text-xs uppercase tracking-wider">
-                  <th className="py-5 px-6 font-semibold">Rank</th>
-                  <th className="py-5 px-6 font-semibold">Trader</th>
-                  <th className="py-5 px-6 font-semibold text-right">Lifetime PnL</th>
+                  <th className="py-5 px-6 font-semibold">{t('rank')}</th>
+                  <th className="py-5 px-6 font-semibold">{t('trader')}</th>
+                  <th className="py-5 px-6 font-semibold text-right">{t('realizedPnl')}</th>
                 </tr>
               </thead>
               <tbody>

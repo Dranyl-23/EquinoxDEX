@@ -78,7 +78,7 @@ fn test_dynamic_skew_funding() {
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
     client.deposit_margin(&user1, &102_0000000); // Extra 2 USDC to cover 0.1% open_fee (C4 FIX)
-    client.open_position(&user1, &user1, &100_0000000, &10, &true, &0, &0, &0);
+    let pos_id1 = client.open_position(&user1, &user1, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &0, &0, &0);
     
     let state1 = client.get_market_state();
     assert_eq!(state1.0, 1000_0000000); // Long OI (100 margin * 10 leverage)
@@ -89,7 +89,7 @@ fn test_dynamic_skew_funding() {
     advance_time(&env, 100);
 
     client.deposit_margin(&user2, &102_0000000);
-    client.open_position(&user2, &user2, &100_0000000, &10, &false, &0, &0, &0);
+    let pos_id2 = client.open_position(&user2, &user2, &Symbol::new(&env, "BTC"), &100_0000000, &10, &false, &0, &0, &0);
 
     let state2 = client.get_market_state();
     assert_eq!(state2.0, 1000_0000000); // Long OI
@@ -98,10 +98,10 @@ fn test_dynamic_skew_funding() {
 
     advance_time(&env, 100);
 
-    let payout1 = client.close_position(&user1, &user1, &0);
+    let payout1 = client.close_position(&user1, &user1, &pos_id1, &0);
     assert_eq!(payout1, -11_0000000); // -10 USDC funding loss, -1 USDC close fee
 
-    let payout2 = client.close_position(&user2, &user2, &0);
+    let payout2 = client.close_position(&user2, &user2, &pos_id2, &0);
     assert_eq!(payout2, -1_0000000);  // 0 funding diff, -1 USDC close fee
 }
 
@@ -128,7 +128,7 @@ fn test_take_profit_trigger() {
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
     client.deposit_margin(&user, &102_0000000);
-    client.open_position(&user, &user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
+    client.open_position(&user, &user, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
 
     set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
 
@@ -161,7 +161,7 @@ fn test_order_not_triggered() {
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
     client.deposit_margin(&user, &102_0000000);
-    client.open_position(&user, &user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
+    client.open_position(&user, &user, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
 
     set_dummy_price(&env, &oracle_id, "BTC", 65000_0000000);
 
@@ -196,21 +196,21 @@ fn test_leaderboard() {
     // User 1 makes profit
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
     client.deposit_margin(&user1, &102_0000000); // Extra 2 USDC to cover 0.1% open_fee (C4 FIX)
-    client.open_position(&user1, &user1, &100_0000000, &10, &true, &0, &0, &0);
+    let p1 = client.open_position(&user1, &user1, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &0, &0, &0);
     set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
-    client.close_position(&user1, &user1, &0);
+    client.close_position(&user1, &user1, &p1, &0);
     
     // User 2 takes a loss
     client.deposit_margin(&user2, &102_0000000);
-    client.open_position(&user2, &user2, &100_0000000, &10, &true, &0, &0, &0);
+    let p2 = client.open_position(&user2, &user2, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &0, &0, &0);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
-    client.close_position(&user2, &user2, &0);
+    client.close_position(&user2, &user2, &p2, &0);
     
     // User 3 makes more profit
     client.deposit_margin(&user3, &102_0000000);
-    client.open_position(&user3, &user3, &100_0000000, &20, &true, &0, &0, &0);
+    let p3 = client.open_position(&user3, &user3, &Symbol::new(&env, "BTC"), &100_0000000, &20, &true, &0, &0, &0);
     set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
-    client.close_position(&user3, &user3, &0);
+    client.close_position(&user3, &user3, &p3, &0);
 
     let leaderboard = client.get_leaderboard();
     assert_eq!(leaderboard.len(), 3);
@@ -254,16 +254,12 @@ fn test_session_keys() {
 
     client.deposit_margin(&user, &102_0000000);
     // Open position using session key as caller!
-    client.open_position(&session, &user, &100_0000000, &10, &true, &0, &0, &0);
+    let p_id = client.open_position(&session, &user, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &0, &0, &0);
     
     // Check it worked
-    let position = client.get_position(&user);
-    assert_eq!(position.margin, 100_0000000); // Full margin reserved in cross-margin mode
-
-    // Try opening position using hacker as caller (should fail in a real auth environment, 
-    // but with mock_all_auths, we need to manually test the logic or use a specific expect_auth check)
-    // Actually, mock_all_auths allows anything to succeed the `require_auth` call.
-    // However, our custom logic `panic!("unauthorized caller")` will trigger BEFORE `require_auth`!
+    let positions = client.get_positions(&user);
+    assert_eq!(positions.len(), 1);
+    assert_eq!(positions.get(0).unwrap().id, p_id);
 }
 
 #[test]
@@ -292,7 +288,7 @@ fn test_session_keys_hacker() {
 
     client.deposit_margin(&user, &102_0000000);
     // Try opening position using hacker as caller
-    client.open_position(&evil_hacker, &user, &100_0000000, &10, &true, &0, &0, &0);
+    client.open_position(&evil_hacker, &user, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &0, &0, &0);
 }
 
 #[test]
@@ -328,8 +324,9 @@ fn test_limit_orders() {
     let keeper = Address::generate(&env);
     client.trigger_orders(&keeper, &user);
 
-    let pos = client.get_position(&user);
-    assert_eq!(pos.entry_price, 54000_0000000);
+    let positions = client.get_positions(&user);
+    assert_eq!(positions.len(), 1);
+    assert_eq!(positions.get(0).unwrap().entry_price, 54000_0000000);
 }
 
 #[test]

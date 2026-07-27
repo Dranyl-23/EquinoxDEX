@@ -2,10 +2,13 @@
 import React, { useState } from 'react';
 import { Position, Order } from '@/lib/contract';
 import { DECIMALS } from '@/lib/constants';
+import { useSettings } from '../SettingsProvider';
+import { useLanguage } from '../LanguageProvider';
 
 interface PositionsTableProps {
   publicKey: string | null;
-  position: Position | null;
+  position?: Position | null;
+  positions?: Position[];
   pendingPosition: Position | null;
   limitOrders: Order[];
   currentPrice: number;
@@ -13,15 +16,17 @@ interface PositionsTableProps {
   pnlPercent: number;
   fundingPnl: number;
   isSubmitting: boolean;
-  onClosePosition: (pct?: number) => Promise<void>;
+  onClosePosition: (positionIdOrPct?: any, pct?: number) => Promise<void>;
   onTriggerKeeper: () => Promise<void>;
   onSharePnL: () => void;
   onCancelOrder?: (index: number) => Promise<void>;
+  onModifyTpSl?: (positionId: number, tp: number, sl: number, trailing: number) => Promise<void>;
 }
 
 export const PositionsTable: React.FC<PositionsTableProps> = ({
   publicKey,
   position,
+  positions = position ? [position] : [],
   pendingPosition,
   limitOrders,
   currentPrice,
@@ -33,11 +38,23 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   onTriggerKeeper,
   onSharePnL,
   onCancelOrder,
+  onModifyTpSl,
 }) => {
-  const [activeTab, setActiveTab] = useState<'positions' | 'orders'>('positions');
-  const [showCloseModal, setShowCloseModal] = useState(false);
+  const { settings } = useSettings();
+  const { t, formatNum } = useLanguage();
+  const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'history'>('positions');
+  const [selectedCloseId, setSelectedCloseId] = useState<number | null>(null);
 
-  const activePositionCount = (position ? 1 : 0) + (pendingPosition ? 1 : 0);
+  const displayPositions = positions.length > 0 ? positions : (position ? [position] : []);
+  const activePositionCount = displayPositions.length + (pendingPosition ? 1 : 0);
+
+  const handleClose = (posId?: number, pct?: number) => {
+    if (typeof posId === 'number') {
+      onClosePosition(posId, pct);
+    } else {
+      onClosePosition(posId);
+    }
+  };
 
   return (
     <div className="h-72 border-t border-border/50 bg-panel/40 backdrop-blur-md flex flex-col z-10">
@@ -51,7 +68,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
               : 'text-muted hover:text-white border-transparent'
           }`}
         >
-          <span>Positions</span>
+          <span>{t('positions') || 'Positions'}</span>
           <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
             activePositionCount > 0 ? 'bg-brand/20 text-brand font-bold' : 'bg-border text-muted'
           }`}>
@@ -67,30 +84,41 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
               : 'text-muted hover:text-white border-transparent'
           }`}
         >
-          <span>Open Orders</span>
+          <span>{t('openOrders') || 'Open Orders'}</span>
           <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
             limitOrders.length > 0 ? 'bg-brand/20 text-brand font-bold' : 'bg-border text-muted'
           }`}>
             {limitOrders.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`pb-2.5 flex items-center gap-2 border-b-2 transition-all ${
+            activeTab === 'history'
+              ? 'text-white border-brand font-bold'
+              : 'text-muted hover:text-white border-transparent'
+          }`}
+        >
+          <span>{t('tradeHistory') || 'Trade History (On-Chain)'}</span>
+        </button>
       </div>
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto p-4">
         <div className="w-full border border-border/60 rounded-lg bg-background overflow-hidden min-h-full flex flex-col shadow-inner">
-          {activeTab === 'positions' ? (
+          {activeTab === 'positions' && (
             <table className="w-full text-left text-sm">
               <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-2.5 font-semibold">Market</th>
-                  <th className="px-4 py-2.5 font-semibold">Size</th>
-                  <th className="px-4 py-2.5 font-semibold">Margin</th>
-                  <th className="px-4 py-2.5 font-semibold">Entry Price</th>
-                  <th className="px-4 py-2.5 font-semibold text-danger/90">Liq. Price</th>
-                  <th className="px-4 py-2.5 font-semibold">TP / SL</th>
-                  <th className="px-4 py-2.5 font-semibold">PnL</th>
-                  <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('market') || 'Market'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('size') || 'Size'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('margin') || 'Margin'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('entryPrice') || 'Entry Price'}</th>
+                  <th className="px-4 py-2.5 font-semibold text-danger/90">{t('liqPrice') || 'Liq. Price'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('editTpSl') || 'TP / SL'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('pnl') || 'PnL'}</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">{t('action') || 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -100,7 +128,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                       Connect wallet to view positions.
                     </td>
                   </tr>
-                ) : !position && !pendingPosition ? (
+                ) : displayPositions.length === 0 && !pendingPosition ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
                       No open positions yet.
@@ -108,77 +136,77 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                   </tr>
                 ) : (
                   <>
-                    {position && (() => {
-                      const entryUsd = position.entry_price / DECIMALS;
-                      const liqFrac = 0.98 / position.leverage;
-                      const liqPrice = position.is_long 
+                    {displayPositions.map((pos) => {
+                      const entryUsd = pos.entry_price / DECIMALS;
+                      const liqFrac = 0.98 / pos.leverage;
+                      const liqPrice = pos.is_long 
                         ? entryUsd * (1 - liqFrac)
                         : entryUsd * (1 + liqFrac);
 
                       return (
-                      <tr className="hover:bg-panel/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <span className="font-bold text-white">EQX-PERP</span>
-                          <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded ${position.is_long ? 'bg-brand/20 text-brand' : 'bg-danger/20 text-danger'}`}>
-                            {position.leverage}x {position.is_long ? 'Long' : 'Short'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono">{currentPrice > 0 ? ((position.margin / DECIMALS) * position.leverage / currentPrice).toFixed(4) : "..."} BTC</td>
-                        <td className="px-4 py-3 font-mono">{position.margin / DECIMALS} USDC</td>
-                        <td className="px-4 py-3 font-mono">${(position.entry_price / DECIMALS).toLocaleString()}</td>
-                        <td className="px-4 py-3 font-mono text-danger font-semibold" title="Cross-Margin Liquidation Trigger Price">
-                          ${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-muted">
-                          {position.take_profit > 0 ? <span className="text-brand">TP: ${(position.take_profit / DECIMALS).toLocaleString()}</span> : 'No TP'}<br/>
-                          {position.stop_loss > 0 ? <span className="text-danger">SL: ${(position.stop_loss / DECIMALS).toLocaleString()}</span> : 'No SL'}
-                        </td>
-                        <td className={`px-4 py-3 font-mono ${pnl >= 0 ? 'text-brand' : 'text-danger'}`}>
-                          {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} ({pnlPercent.toFixed(2)}%)
-                          <div className="text-xs text-muted font-sans mt-0.5" title="Funding PnL">
-                            Funding: {fundingPnl >= 0 ? '+' : ''}{fundingPnl.toFixed(2)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2 items-center">
-                            <button 
-                              onClick={onSharePnL}
-                              className="bg-brand/20 text-brand hover:bg-brand/40 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-brand/40 shadow-sm"
-                              title="Share your PnL on Twitter/X"
-                            >
-                              Share PnL
-                            </button>
-                            {showCloseModal ? (
-                              <div className="flex gap-1 items-center bg-panel border border-border/80 rounded-md p-1 shadow-lg">
-                                {[25, 50, 75, 100].map(pct => (
-                                  <button
-                                    key={pct}
-                                    onClick={() => {
-                                      onClosePosition(pct);
-                                      setShowCloseModal(false);
-                                    }}
-                                    disabled={isSubmitting}
-                                    className="px-2.5 py-1 hover:bg-brand hover:text-white rounded text-xs font-mono font-medium transition-colors"
-                                  >
-                                    {pct}%
-                                  </button>
-                                ))}
-                                <button onClick={() => setShowCloseModal(false)} className="px-2 py-1 text-danger hover:bg-danger/20 rounded font-bold">✕</button>
-                              </div>
-                            ) : (
+                        <tr key={pos.id || pos.symbol} className="hover:bg-panel/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-white">{pos.symbol || 'EQX-PERP'}</span>
+                            <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded ${pos.is_long ? 'bg-brand/20 text-brand' : 'bg-danger/20 text-danger'}`}>
+                              {pos.leverage}x {pos.is_long ? 'Long' : 'Short'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-mono">{currentPrice > 0 ? ((pos.margin / DECIMALS) * pos.leverage / currentPrice).toFixed(4) : "..."} BTC</td>
+                          <td className="px-4 py-3 font-mono">{pos.margin / DECIMALS} USDC</td>
+                          <td className="px-4 py-3 font-mono">${(pos.entry_price / DECIMALS).toLocaleString()}</td>
+                          <td className="px-4 py-3 font-mono text-danger font-semibold" title="Cross-Margin Liquidation Trigger Price">
+                            ${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-muted">
+                            {pos.take_profit > 0 ? <span className="text-brand">TP: ${(pos.take_profit / DECIMALS).toLocaleString()}</span> : 'No TP'}<br/>
+                            {pos.stop_loss > 0 ? <span className="text-danger">SL: ${(pos.stop_loss / DECIMALS).toLocaleString()}</span> : 'No SL'}
+                          </td>
+                          <td className={`px-4 py-3 font-mono ${pnl >= 0 ? 'text-brand' : 'text-danger'}`}>
+                            {settings?.hidePnl ? '****.** (****%)' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`}
+                            <div className="text-xs text-muted font-sans mt-0.5" title="Funding PnL">
+                              Funding: {settings?.hidePnl ? '****.**' : `${fundingPnl >= 0 ? '+' : ''}${fundingPnl.toFixed(2)}`}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end gap-2 items-center">
                               <button 
-                                onClick={() => setShowCloseModal(true)}
-                                disabled={isSubmitting}
-                                className="bg-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-danger/40 disabled:opacity-50"
+                                onClick={onSharePnL}
+                                className="bg-brand/20 text-brand hover:bg-brand/40 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-brand/40 shadow-sm"
+                                title="Share your PnL on Twitter/X"
                               >
-                                Close Position
+                                {t('sharePnl') || 'Share PnL'}
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                              {selectedCloseId === pos.id ? (
+                                <div className="flex gap-1 items-center bg-panel border border-border/80 rounded-md p-1 shadow-lg">
+                                  {[25, 50, 75, 100].map(pct => (
+                                    <button
+                                      key={pct}
+                                      onClick={() => {
+                                        handleClose(pos.id, pct);
+                                        setSelectedCloseId(null);
+                                      }}
+                                      disabled={isSubmitting}
+                                      className="px-2.5 py-1 hover:bg-brand hover:text-white rounded text-xs font-mono font-medium transition-colors"
+                                    >
+                                      {pct}%
+                                    </button>
+                                  ))}
+                                  <button onClick={() => setSelectedCloseId(null)} className="px-2 py-1 text-danger hover:bg-danger/20 rounded font-bold">✕</button>
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => setSelectedCloseId(pos.id)}
+                                  disabled={isSubmitting}
+                                  className="bg-danger/20 text-danger hover:bg-danger hover:text-white px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-danger/40 disabled:opacity-50"
+                                >
+                                  {t('closePosition') || 'Close Position'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       );
-                    })()}
+                    })}
                     {pendingPosition && (
                       <tr className="bg-panel/30 animate-pulse">
                         <td className="px-4 py-3">
@@ -205,15 +233,17 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                 )}
               </tbody>
             </table>
-          ) : (
+          )}
+
+          {activeTab === 'orders' && (
             <table className="w-full text-left text-sm">
               <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Type</th>
-                  <th className="px-4 py-2.5 font-semibold">Size</th>
-                  <th className="px-4 py-2.5 font-semibold">Trigger Price</th>
-                  <th className="px-4 py-2.5 font-semibold">TP / SL</th>
-                  <th className="px-4 py-2.5 font-semibold text-right">Action</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('size') || 'Size'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('limitPrice') || 'Trigger Price'}</th>
+                  <th className="px-4 py-2.5 font-semibold">{t('editTpSl') || 'TP / SL'}</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">{t('action') || 'Action'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -250,7 +280,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                             disabled={isSubmitting}
                             className="bg-panel border border-border/80 hover:bg-danger/20 hover:text-danger hover:border-danger/40 text-xs px-2.5 py-1 rounded transition-colors disabled:opacity-50"
                           >
-                            Cancel
+                            {t('cancelOrder') || 'Cancel'}
                           </button>
                         )}
                       </td>

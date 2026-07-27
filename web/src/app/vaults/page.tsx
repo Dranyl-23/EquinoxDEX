@@ -4,8 +4,10 @@ import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
 import { readMarginBalance } from '@/lib/contract';
 import { DECIMALS } from '@/lib/constants';
+import { useLanguage } from '@/components/LanguageProvider';
 
 export default function VaultsPage() {
+  const { t, formatNum } = useLanguage();
   const wallet = useWalletContext();
   const { publicKey } = wallet;
 
@@ -80,7 +82,7 @@ export default function VaultsPage() {
         
         {/* Header */}
         <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-3xl font-bold text-white">EQX Liquidity Vault (ELP)</h2>
+          <h2 className="text-3xl font-bold text-white">{t('liquidityVault')}</h2>
           <p className="text-muted">
             Deposit USDC to supply liquidity for EquinoxDEX trades. Earn real yield from 60% of protocol fees + liquidation surpluses.
           </p>
@@ -89,23 +91,23 @@ export default function VaultsPage() {
         {/* Global Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Total Value Locked (TVL)</div>
+            <div className="text-sm text-muted mb-1">{t('totalValueLocked')}</div>
             <div className="text-2xl font-mono font-bold text-white">${tvl.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">Real Yield APY (7d)</div>
+            <div className="text-sm text-muted mb-1">{t('estimatedApr')}</div>
             <div className="text-2xl font-mono font-bold text-green-500">{apy}% APY</div>
             <div className="text-xs text-muted mt-1">Auto-compounded daily</div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">ELP Token Price</div>
+            <div className="text-sm text-muted mb-1">{t('elpPrice')}</div>
             <div className="text-2xl font-mono font-bold text-white">${elpPrice.toFixed(4)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
 
           <div className="bg-panel border border-border rounded-lg p-5">
-            <div className="text-sm text-muted mb-1">24h Yield Distributed</div>
+            <div className="text-sm text-muted mb-1">{t('dailyYield')}</div>
             <div className="text-2xl font-mono font-bold text-green-500">${dailyYield.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
         </div>
@@ -126,7 +128,7 @@ export default function VaultsPage() {
                     : 'text-muted hover:text-white border-transparent'
                 }`}
               >
-                Deposit USDC (Mint ELP)
+                {t('depositUsdc')}
               </button>
 
               <button

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
 import {
-  readPosition,
+  readPositions,
   readMarketState,
   readLimitOrders,
   readMarginBalance,
@@ -14,6 +14,7 @@ import {
   buildTriggerOrdersXDR,
   buildPlaceLimitOrderXDR,
   buildCancelLimitOrderXDR,
+  buildModifyTpSlXDR,
   contractConfigured,
   buildDepositMarginXDR,
   buildWithdrawMarginXDR,
@@ -22,33 +23,74 @@ import {
 } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
 import { getSessionKey, generateSessionKey, clearSessionKey, use1ClickEnabled } from '@/lib/sessionKey';
-import { TradingChart } from '@/components/TradingChart';
+import { initTelegramMiniApp } from '@/lib/telegram';
+import { SkewBar } from '@/components/trading/SkewBar';
 import { SharePnLModal } from '@/components/SharePnLModal';
+import { TradingChart } from '@/components/TradingChart';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 import { useLivePrice } from '@/hooks/useLivePrice';
 import PnLShareCard from '@/components/PnLShareCard';
+import { useToast } from '@/components/Toast';
 
 // Modular Trading Components (H12 Refactor)
 import { MarketHeader } from '@/components/trading/MarketHeader';
 import { PositionsTable } from '@/components/trading/PositionsTable';
 import { OrderForm } from '@/components/trading/OrderForm';
 import { OrderBook } from '@/components/trading/OrderBook';
+import { MarketSelectorModal } from '@/components/trading/MarketSelectorModal';
+import { ShortcutsModal } from '@/components/trading/ShortcutsModal';
+import { AccountModeModal, AccountMarginMode } from '@/components/trading/AccountModeModal';
+import { MARKETS, MarketInfo } from '@/lib/markets';
 
 export default function Home() {
   const wallet = useWalletContext();
   const { publicKey } = wallet;
-  const { price: livePrice, loading: priceLoading, error: priceError } = useLivePrice('BTCUSDT');
+  const { toast } = useToast();
+  const [selectedMarket, setSelectedMarket] = useState<string>('BTCUSDT');
+  const [showMarketModal, setShowMarketModal] = useState<boolean>(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
+  const [showAccountModeModal, setShowAccountModeModal] = useState<boolean>(false);
+  const [accountMode, setAccountMode] = useState<AccountMarginMode>('cross');
+  const { price: livePrice, loading: priceLoading, error: priceError } = useLivePrice(selectedMarket);
   const currentPrice = livePrice || 0;
 
   const [balances, setBalances] = useState<Balances | null>(null);
   const [marginBalance, setMarginBalance] = useState<number>(0);
-  const [position, setPosition] = useState<Position | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [limitOrders, setLimitOrders] = useState<Order[]>([]);
   const [pendingPosition, setPendingPosition] = useState<Position | null>(null);
   const [marketState, setMarketState] = useState({ long_oi: 0, short_oi: 0, global_funding: 0, total_volume: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
   const is1ClickEnabled = use1ClickEnabled();
+
+  // Task #18 & Shortcuts: Initialize Telegram SDK and Global Pro Hotkeys
+  useEffect(() => {
+    initTelegramMiniApp();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger hotkeys if user is typing inside an input field
+      const targetTag = (e.target as HTMLElement)?.tagName;
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowMarketModal((prev) => !prev);
+      } else if (e.key === '?' || (e.shiftKey && e.key === '?')) {
+        e.preventDefault();
+        setShowShortcutsModal((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setShowMarketModal(false);
+        setShowShortcutsModal(false);
+        setShowShareCard(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Poll for balances, position, and market state
   useEffect(() => {
@@ -59,8 +101,8 @@ export default function Home() {
         setBalances(bal);
         const mBal = await readMarginBalance(publicKey);
         setMarginBalance(mBal);
-        const pos = await readPosition(publicKey);
-        setPosition(pos);
+        const posList = await readPositions(publicKey);
+        setPositions(posList);
         const orders = await readLimitOrders(publicKey);
         setLimitOrders(orders);
         const state = await readMarketState();
@@ -75,7 +117,7 @@ export default function Home() {
   }, [publicKey]);
 
   const handleOpenPosition = async (params: {
-    orderTab: 'Market' | 'Limit';
+    orderTab: 'Market' | 'Limit' | 'Stop Market' | 'Stop Limit';
     positionType: 'Long' | 'Short';
     marginInput: string;
     leverage: number;
@@ -100,6 +142,8 @@ export default function Home() {
       if (params.orderTab === 'Market') {
         // Optimistic UI: Set pending position
         setPendingPosition({
+          id: 0,
+          symbol: selectedMarket,
           margin: marginScaled,
           leverage: params.leverage,
           entry_price: currentPrice * DECIMALS,
@@ -110,7 +154,7 @@ export default function Home() {
           trailing_stop_distance: trailingScaled,
         });
 
-        const xdr = await buildOpenPositionXDR(caller, publicKey, marginScaled, params.leverage, isLong, tpScaled, slScaled, trailingScaled);
+        const xdr = await buildOpenPositionXDR(caller, publicKey, selectedMarket, marginScaled, params.leverage, isLong, tpScaled, slScaled, trailingScaled);
         await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
         setPendingPosition(null);
       } else {
@@ -120,45 +164,44 @@ export default function Home() {
       }
 
       // Fast refresh
-      const pos = await readPosition(publicKey);
-      setPosition(pos);
+      const posList = await readPositions(publicKey);
+      setPositions(posList);
       const orders = await readLimitOrders(publicKey);
       setLimitOrders(orders);
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
       const mBal = await readMarginBalance(publicKey);
       setMarginBalance(mBal);
+      toast('Order Submitted Successfully', 'success', `Opened ${params.positionType} position on ${selectedMarket}`);
     } catch (e: unknown) {
       setPendingPosition(null);
-      alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Order Execution Failed', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleClosePosition = async (pct: number = 100) => {
-    if (!publicKey || !position) return;
+  const handleClosePosition = async (positionId: number, pct: number = 100) => {
+    if (!publicKey) return;
+    const targetPos = positions.find(p => p.id === positionId);
+    if (!targetPos) return;
     setIsSubmitting(true);
     try {
       const sessionKey = getSessionKey();
       const caller = sessionKey ? sessionKey.publicKey : publicKey;
-      const marginToClose = (position.margin * pct) / 100;
-      const xdr = await buildClosePositionXDR(caller, publicKey, marginToClose);
+      const marginToClose = (targetPos.margin * pct) / 100;
+      const xdr = await buildClosePositionXDR(caller, publicKey, positionId, marginToClose);
       await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
 
-      // Fast refresh
-      if (pct === 100) {
-        setPosition(null);
-      } else {
-        const pos = await readPosition(publicKey);
-        setPosition(pos);
-      }
+      const posList = await readPositions(publicKey);
+      setPositions(posList);
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
       const mBal = await readMarginBalance(publicKey);
       setMarginBalance(mBal);
+      toast('Position Closed', 'success', `Closed ${pct}% of ${targetPos.symbol}`);
     } catch (e: unknown) {
-      alert(`Close Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Close Position Error', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,17 +214,16 @@ export default function Home() {
       const xdr = await buildTriggerOrdersXDR(publicKey, publicKey);
       await signAndSubmit(xdr, publicKey);
 
-      // H10 FIX: Fetch real state instead of blindly calling setPosition(null)
-      const updatedPos = await readPosition(publicKey);
-      setPosition(updatedPos);
+      const updatedPosList = await readPositions(publicKey);
+      setPositions(updatedPosList);
 
       const bal = await fetchBalances(publicKey);
       setBalances(bal);
       const mBal = await readMarginBalance(publicKey);
       setMarginBalance(mBal);
-      alert('Keeper successfully triggered TP/SL or liquidation check!');
+      toast('Keeper Trigger Executed', 'success', 'Successfully processed TP/SL & liquidation check!');
     } catch (e: unknown) {
-      alert(`Keeper Trigger Failed: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Keeper Trigger Failed', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -199,8 +241,9 @@ export default function Home() {
       setBalances(bal);
       const mBal = await readMarginBalance(publicKey);
       setMarginBalance(mBal);
+      toast('Deposit Successful', 'success', `Added ${amountStr} USDC to Cross-Margin Balance`);
     } catch (e: unknown) {
-      alert(`Deposit Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Deposit Error', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -219,8 +262,9 @@ export default function Home() {
       setBalances(bal);
       const mBal = await readMarginBalance(publicKey);
       setMarginBalance(mBal);
+      toast('Withdrawal Successful', 'success', `Withdrew ${amountStr} USDC to Wallet`);
     } catch (e: unknown) {
-      alert(`Withdraw Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Withdraw Error', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -237,8 +281,28 @@ export default function Home() {
 
       const orders = await readLimitOrders(publicKey);
       setLimitOrders(orders);
+      toast('Order Cancelled', 'info', `Limit order #${orderIndex + 1} has been cancelled`);
     } catch (e: unknown) {
-      alert(`Cancel Order Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Cancel Order Error', 'error', e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleModifyTpSl = async (positionId: number, tp: number, sl: number, trailing: number) => {
+    if (!publicKey) return;
+    setIsSubmitting(true);
+    try {
+      const sessionKey = getSessionKey();
+      const caller = sessionKey?.publicKey ?? publicKey;
+      const xdr = await buildModifyTpSlXDR(caller, publicKey, positionId, tp, sl, trailing);
+      await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
+
+      const posList = await readPositions(publicKey);
+      setPositions(posList);
+      toast('TP/SL Updated', 'success', 'Position Take Profit & Stop Loss updated successfully');
+    } catch (e: unknown) {
+      toast('Modify TP/SL Error', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -248,6 +312,7 @@ export default function Home() {
     if (!publicKey) return;
     if (is1ClickEnabled) {
       clearSessionKey();
+      toast('1-Click Trading Disabled', 'info', 'Returned to manual wallet signing mode');
     } else {
       setIsSubmitting(true);
       try {
@@ -260,33 +325,34 @@ export default function Home() {
         }
         const xdr = await buildAddSessionKeyXDR(publicKey, session.publicKey);
         await signAndSubmit(xdr, publicKey, true);
+        toast('1-Click Trading Enabled', 'success', 'Ephemeral session key authorized for 24h instant execution');
       } catch (e: unknown) {
         clearSessionKey();
-        alert(`Failed to enable 1-Click Trading: ${e instanceof Error ? e.message : String(e)}`);
+        toast('1-Click Setup Failed', 'error', e instanceof Error ? e.message : String(e));
       } finally {
         setIsSubmitting(false);
       }
     }
   };
 
-  // PnL Calc for active position
+  // PnL Calc for active positions
   let pnl = 0;
   let pnlPercent = 0;
   let fundingPnl = 0;
 
-  if (position) {
-    const rawMargin = position.margin / DECIMALS;
-    const rawEntry = position.entry_price / DECIMALS;
-    const priceDiff = position.is_long ? currentPrice - rawEntry : rawEntry - currentPrice;
-    const pricePnl = (priceDiff * rawMargin * position.leverage) / rawEntry;
+  const firstPos = positions[0] || null;
+  if (firstPos) {
+    const rawMargin = firstPos.margin / DECIMALS;
+    const rawEntry = firstPos.entry_price / DECIMALS;
+    const priceDiff = firstPos.is_long ? currentPrice - rawEntry : rawEntry - currentPrice;
+    const pricePnl = (priceDiff * rawMargin * firstPos.leverage) / rawEntry;
 
-    // Funding Rate PnL
     const rawCurrentFunding = marketState.global_funding / DECIMALS;
-    const rawEntryFunding = position.funding_index_at_entry / DECIMALS;
+    const rawEntryFunding = firstPos.funding_index_at_entry / DECIMALS;
     const fundingDiff = rawCurrentFunding - rawEntryFunding;
-    const positionSize = rawMargin * position.leverage;
+    const positionSize = rawMargin * firstPos.leverage;
 
-    fundingPnl = position.is_long
+    fundingPnl = firstPos.is_long
       ? -(fundingDiff * positionSize) / 1000
       : (fundingDiff * positionSize) / 1000;
 
@@ -304,19 +370,31 @@ export default function Home() {
             <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand/10 blur-[100px] rounded-full pointer-events-none"></div>
             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-brand/5 blur-[100px] rounded-full pointer-events-none"></div>
 
-            <MarketHeader currentPrice={currentPrice} marketState={marketState} loading={priceLoading} error={priceError} />
+            <MarketHeader 
+              currentPrice={currentPrice} 
+              marketState={marketState} 
+              loading={priceLoading} 
+              error={priceError} 
+              selectedMarket={selectedMarket}
+              onOpenMarketModal={() => setShowMarketModal(true)}
+              onOpenShortcutsModal={() => setShowShortcutsModal(true)}
+            />
+            
+            <div className="px-4 py-1.5 border-b border-border/50 bg-panel/20">
+              <SkewBar totalLongOi={marketState.long_oi} totalShortOi={marketState.short_oi} />
+            </div>
 
             <div className="flex-1 flex overflow-hidden w-full h-full">
-              <OrderBook currentPrice={currentPrice} />
+              <OrderBook currentPrice={currentPrice} symbol={selectedMarket} />
               <div className="flex-1 flex items-center justify-center text-muted h-full w-full relative overflow-hidden">
-                <TradingChart />
+                <TradingChart symbol={selectedMarket} />
               </div>
             </div>
           </div>
 
           <PositionsTable
             publicKey={publicKey}
-            position={position}
+            positions={positions}
             pendingPosition={pendingPosition}
             limitOrders={limitOrders}
             currentPrice={currentPrice}
@@ -328,6 +406,7 @@ export default function Home() {
             onTriggerKeeper={handleTriggerKeeper}
             onSharePnL={() => setShowShareCard(true)}
             onCancelOrder={handleCancelOrder}
+            onModifyTpSl={handleModifyTpSl}
           />
         </div>
 
@@ -337,7 +416,7 @@ export default function Home() {
           balances={balances}
           marginBalance={marginBalance}
           currentPrice={currentPrice}
-          position={position}
+          position={firstPos}
           pnl={pnl}
           isSubmitting={isSubmitting}
           onOpenPosition={handleOpenPosition}
@@ -345,6 +424,8 @@ export default function Home() {
           onWithdraw={handleWithdraw}
           is1ClickEnabled={is1ClickEnabled}
           onToggle1Click={handleToggle1Click}
+          accountMode={accountMode}
+          onOpenAccountModeModal={() => setShowAccountModeModal(true)}
         />
       </div>
 
@@ -352,10 +433,34 @@ export default function Home() {
         isOpen={showShareCard}
         onClose={() => setShowShareCard(false)}
         publicKey={publicKey}
-        position={position}
+        position={firstPos}
         pnl={pnl}
         pnlPercent={pnlPercent}
         currentPrice={currentPrice}
+      />
+
+      <MarketSelectorModal
+        isOpen={showMarketModal}
+        onClose={() => setShowMarketModal(false)}
+        currentSymbol={selectedMarket}
+        onSelectMarket={(market: MarketInfo) => {
+          setSelectedMarket(market.symbol);
+        }}
+      />
+
+      <ShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
+
+      <AccountModeModal
+        isOpen={showAccountModeModal}
+        onClose={() => setShowAccountModeModal(false)}
+        currentMode={accountMode}
+        onSelectMode={(mode) => {
+          setAccountMode(mode);
+          toast('Account Margin Mode Updated', 'info', `Switched risk mode to ${mode.toUpperCase()} margin`);
+        }}
       />
     </main>
   );

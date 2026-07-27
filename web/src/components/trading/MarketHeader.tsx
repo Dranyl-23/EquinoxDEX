@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { DECIMALS } from '@/lib/constants';
+import { useLanguage } from '../LanguageProvider';
 
 export interface MarketHeaderProps {
   currentPrice: number;
@@ -9,6 +10,8 @@ export interface MarketHeaderProps {
   error?: string | null;
   selectedMarket?: string;
   onSelectMarket?: (market: string) => void;
+  onOpenMarketModal?: () => void;
+  onOpenShortcutsModal?: () => void;
 }
 
 const TokenLogo = ({ id }: { id: string }) => {
@@ -90,7 +93,10 @@ export function MarketHeader({
   error,
   selectedMarket = 'EQX-PERP',
   onSelectMarket,
+  onOpenMarketModal,
+  onOpenShortcutsModal,
 }: MarketHeaderProps) {
+  const { t, formatNum } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [activeMarket, setActiveMarket] = useState(selectedMarket);
 
@@ -99,7 +105,7 @@ export function MarketHeader({
   const isSkewLong = skew > 0;
   const isSkewShort = skew < 0;
 
-  const currentObj = MARKETS.find((m) => m.id === activeMarket) || MARKETS[0];
+  const currentObj = MARKETS.find((m) => m.id === (selectedMarket || activeMarket)) || MARKETS[0];
 
   const handleSelect = (id: string) => {
     setActiveMarket(id);
@@ -111,45 +117,19 @@ export function MarketHeader({
     <div className="flex items-center justify-between border-b border-border/50 px-6 py-4 bg-panel/30 backdrop-blur-md z-30 relative">
       <div className="flex items-center gap-4">
         {/* Interactive Market Selector Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-3 text-2xl font-bold text-white hover:text-brand transition-colors focus:outline-none"
-          >
-            <TokenLogo id={currentObj.id} />
-            <span>{currentObj.name}</span>
-            <span className="text-xs text-muted">▼</span>
-            <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {currentObj.badge}
-            </span>
-          </button>
-
-          {isOpen && (
-            <div className="absolute top-full left-0 mt-2 w-64 bg-panel/95 backdrop-blur-xl border border-border/60 rounded-lg shadow-2xl z-50 p-2 flex flex-col gap-1 animate-fadeIn">
-              <div className="text-[10px] font-semibold text-muted px-2 py-1 uppercase tracking-wider">
-                Select Market
-              </div>
-              {MARKETS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => handleSelect(m.id)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-all text-left ${
-                    activeMarket === m.id
-                      ? 'bg-brand/20 text-brand font-bold'
-                      : 'text-white hover:bg-border/40'
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <TokenLogo id={m.id} />
-                    <span className="font-bold">{m.name}</span>
-                  </span>
-                  <span className="text-[10px] text-muted font-mono">{m.badge}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={onOpenMarketModal || (() => setIsOpen(!isOpen))}
+          className="flex items-center gap-3 text-xl font-bold text-white hover:text-brand transition-colors focus:outline-none bg-panel/40 hover:bg-panel border border-border/60 hover:border-brand px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-all"
+          title="Click or press Ctrl+K to select from 200+ Markets"
+        >
+          <TokenLogo id={currentObj.id} />
+          <span>{selectedMarket || currentObj.name}</span>
+          <span className="text-xs text-muted">▼</span>
+          <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            200+ Markets
+          </span>
+        </button>
 
         {error && currentPrice === 0 ? (
           <span className="text-xs text-danger bg-danger/10 px-2.5 py-1 rounded border border-danger/30 font-medium">
@@ -164,25 +144,34 @@ export function MarketHeader({
 
       <div className="flex items-center gap-6 text-sm">
         <div>
-          <div className="text-muted text-xs">Global Skew</div>
+          <div className="text-muted text-xs">{t('openInterest') || 'Global Skew'}</div>
           <div className={`font-medium ${isSkewLong ? 'text-brand' : isSkewShort ? 'text-danger' : 'text-white'}`}>
             {isSkewLong ? `+${skewDisplay} USDC` : `${skewDisplay} USDC`}
           </div>
         </div>
 
         <div>
-          <div className="text-muted text-xs">Global Funding Rate</div>
+          <div className="text-muted text-xs">{t('fundingRate') || 'Global Funding Rate'}</div>
           <div className="font-medium text-white font-mono">
             {((marketState.global_funding / DECIMALS) * 100).toFixed(4)}% / hr
           </div>
         </div>
 
         <div>
-          <div className="text-muted text-xs">Total Volume</div>
+          <div className="text-muted text-xs">{t('volume24h') || 'Total Volume'}</div>
           <div className="font-medium text-white font-mono">
-            ${(marketState.total_volume / DECIMALS).toLocaleString()}
+            ${formatNum(marketState.total_volume / DECIMALS)}
           </div>
         </div>
+
+        <button
+          onClick={onOpenShortcutsModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-panel/60 hover:bg-panel border border-border/60 hover:border-brand text-xs font-semibold text-white transition-all cursor-pointer shadow-xs"
+          title="Press Shift+? for Pro Hotkeys"
+        >
+          <span>⌨️</span>
+          <span>Shortcuts</span>
+        </button>
       </div>
     </div>
   );
