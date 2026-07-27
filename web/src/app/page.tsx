@@ -30,6 +30,7 @@ import PnLShareCard from '@/components/PnLShareCard';
 import { MarketHeader } from '@/components/trading/MarketHeader';
 import { PositionsTable } from '@/components/trading/PositionsTable';
 import { OrderForm } from '@/components/trading/OrderForm';
+import { OrderBook } from '@/components/trading/OrderBook';
 
 export default function Home() {
   const wallet = useWalletContext();
@@ -285,8 +286,11 @@ export default function Home() {
 
             <MarketHeader currentPrice={currentPrice} marketState={marketState} loading={priceLoading} error={priceError} />
 
-            <div className="flex-1 flex items-center justify-center text-muted h-full w-full">
-              <TradingChart />
+            <div className="flex-1 flex overflow-hidden w-full h-full">
+              <OrderBook currentPrice={currentPrice} />
+              <div className="flex-1 flex items-center justify-center text-muted h-full w-full relative overflow-hidden">
+                <TradingChart />
+              </div>
             </div>
           </div>
 
