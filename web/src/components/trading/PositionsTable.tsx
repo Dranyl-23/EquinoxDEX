@@ -135,14 +135,6 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                             >
                               Share PnL
                             </button>
-                            <button 
-                              onClick={onTriggerKeeper}
-                              disabled={isSubmitting}
-                              className="bg-purple-500/20 text-purple-300 hover:bg-purple-500/40 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-purple-500/30 disabled:opacity-50"
-                              title="Simulate a Keeper Bot checking TP/SL targets"
-                            >
-                              Simulate Keeper
-                            </button>
                             {showCloseModal ? (
                               <div className="flex gap-1 items-center bg-panel border border-border/80 rounded-md p-1 shadow-lg">
                                 {[25, 50, 75, 100].map(pct => (
