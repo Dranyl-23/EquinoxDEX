@@ -186,6 +186,24 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             />
             <span className="absolute right-3 top-2.5 text-sm text-muted">USDC</span>
           </div>
+          {/* Quick Margin Preset Buttons */}
+          <div className="flex gap-1.5 mt-1">
+            {[25, 50, 75, 100].map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => {
+                  const avail = (marginBalance / DECIMALS);
+                  if (avail > 0) {
+                    setMarginInput(((avail * pct) / 100).toFixed(2));
+                  }
+                }}
+                className="flex-1 py-1 text-[10px] font-mono font-medium rounded bg-background border border-border/60 text-muted hover:text-white hover:border-brand/50 transition-colors"
+              >
+                {pct === 100 ? 'MAX' : `${pct}%`}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Leverage Slider */}
