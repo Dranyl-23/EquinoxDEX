@@ -633,12 +633,12 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
                   type="date"
                   value={targetDateInput}
                   onChange={(e) => setTargetDateInput(e.target.value)}
-                  className="bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none focus:border-brand"
+                  className="w-full min-w-0 bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none focus:border-brand"
                 />
                 <input
-                  type="text"
+                  type="time"
                   defaultValue="00:00"
-                  className="bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none focus:border-brand text-center"
+                  className="w-full min-w-0 bg-background border border-border/80 rounded-lg px-2.5 py-1.5 text-white text-xs outline-none focus:border-brand text-center"
                 />
               </div>
 
