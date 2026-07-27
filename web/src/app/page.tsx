@@ -398,7 +398,7 @@ export default function Home() {
   const firstPos = positions[0] || null;
 
   return (
-    <main className="flex min-h-[100dvh] w-full flex-col overflow-y-auto lg:overflow-hidden">
+    <main className="flex min-h-[100dvh] w-full flex-col overflow-x-hidden overflow-y-auto lg:overflow-hidden">
       {/* Main Trading Area */}
       <div className="flex flex-col lg:flex-row flex-1 lg:overflow-hidden">
         {/* Left Side: Chart and Positions */}
