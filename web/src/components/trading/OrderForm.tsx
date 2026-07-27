@@ -370,9 +370,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         {/* Primary Order Action Button */}
         <button 
           onClick={handleSubmitOrder}
-          disabled={!publicKey || !isOrderValid || isSubmitting || position !== null}
+          disabled={!publicKey || !isOrderValid || isSubmitting || (orderTab === 'Market' && position !== null)}
           className={`w-full py-3.5 rounded-lg font-bold text-sm transition-all text-center border mb-2
-            ${(!publicKey || !isOrderValid || isSubmitting || position !== null)
+            ${(!publicKey || !isOrderValid || isSubmitting || (orderTab === 'Market' && position !== null))
               ? 'bg-panel/90 text-muted/70 border-border/60 cursor-not-allowed'
               : positionType === 'Long'
                 ? 'bg-brand hover:bg-brand-hover text-white border-brand/50 shadow-lg shadow-brand/20 active:scale-[0.99]'
@@ -382,10 +382,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         >
         {isSubmitting ? 'Processing Order...' : 
          !publicKey ? 'Connect Wallet to Trade' : 
-         position !== null ? 'Position Already Open' :
+         (orderTab === 'Market' && position !== null) ? 'Position Already Open' :
          !isValidMargin ? 'Enter Margin' :
-         !isValidTrigger ? 'Enter Trigger Price' :
+         (orderTab === 'Limit' && !isValidTrigger) ? 'Enter Trigger Price' :
          !isValidTp || !isValidSl || !isValidTrailing ? 'Invalid Advanced Inputs' :
+         orderTab === 'Limit' ? 'Place Limit Order' :
          `${positionType === 'Long' ? 'Buy / Long BTC' : 'Sell / Short BTC'}`}
         </button>
 
