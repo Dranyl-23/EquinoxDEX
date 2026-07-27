@@ -23,6 +23,15 @@ export default function RewardsPage() {
   const [customAlias, setCustomAlias] = useState('');
   const [activeCode, setActiveCode] = useState('');
 
+  // Load saved alias on mount
+  useEffect(() => {
+    const savedAlias = typeof window !== 'undefined' ? localStorage.getItem('equinox_custom_alias') : null;
+    if (savedAlias) {
+      setCustomAlias(savedAlias);
+      setActiveCode(savedAlias);
+    }
+  }, []);
+
   // On-chain Referral State
   const [unclaimedKickback, setUnclaimedKickback] = useState<number>(0);
   const [lifetimeEarnings, setLifetimeEarnings] = useState<number>(0);
@@ -101,6 +110,9 @@ export default function RewardsPage() {
     if (!customAlias.trim()) return;
     const cleanCode = customAlias.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     setActiveCode(cleanCode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('equinox_custom_alias', cleanCode);
+    }
     toast('Custom Referral Code Created', 'success', `Your referral alias is set to ${cleanCode}`);
   };
 
