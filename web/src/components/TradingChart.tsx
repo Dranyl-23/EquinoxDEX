@@ -175,14 +175,14 @@ export const TradingChart = () => {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col">
+    <div className="relative w-full h-full flex flex-col [&_#tv-attr-logo]:hidden [&_a]:hidden">
       {/* Timeframe Selector Toolbar (Hyperliquid Style) */}
-      <div className="absolute top-2 left-2 z-20 flex items-center gap-1 bg-panel/90 backdrop-blur border border-border/50 rounded-md p-1">
+      <div className="absolute top-2.5 left-3 z-20 flex items-center gap-1 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg p-1 shadow-lg">
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
             onClick={() => setSelectedInterval(tf)}
-            className={`px-2 py-0.5 text-xs font-mono font-medium rounded transition-colors ${
+            className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-md transition-all ${
               selectedInterval === tf
                 ? 'bg-brand text-white shadow-sm'
                 : 'text-muted hover:text-white hover:bg-border/40'
@@ -201,7 +201,7 @@ export const TradingChart = () => {
 
       <div
         ref={chartContainerRef}
-        className="w-full h-full pt-10"
+        className="w-full h-full pt-12"
       />
     </div>
   );
