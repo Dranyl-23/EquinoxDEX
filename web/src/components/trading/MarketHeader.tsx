@@ -169,7 +169,6 @@ export function MarketHeader({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-panel/60 hover:bg-panel border border-border/60 hover:border-brand text-xs font-semibold text-white transition-all cursor-pointer shadow-xs"
           title="Press Shift+? for Pro Hotkeys"
         >
-          <span>⌨️</span>
           <span>Shortcuts</span>
         </button>
       </div>
