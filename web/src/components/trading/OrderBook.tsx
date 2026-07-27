@@ -183,7 +183,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         <button
           onClick={() => setActiveTab('book')}
           className={`flex-1 py-1 font-semibold rounded transition-colors text-center ${
-            activeTab === 'book' ? 'bg-brand/20 text-brand border border-brand/30' : 'text-muted hover:text-white'
+            activeTab === 'book' ? 'bg-brand/20 text-brand font-bold' : 'text-muted hover:text-white'
           }`}
         >
           Order Book
@@ -191,7 +191,7 @@ export function OrderBook({ currentPrice }: { currentPrice: number }) {
         <button
           onClick={() => setActiveTab('trades')}
           className={`flex-1 py-1 font-semibold rounded transition-colors text-center ${
-            activeTab === 'trades' ? 'bg-brand/20 text-brand border border-brand/30' : 'text-muted hover:text-white'
+            activeTab === 'trades' ? 'bg-brand/20 text-brand font-bold' : 'text-muted hover:text-white'
           }`}
         >
           Recent Trades

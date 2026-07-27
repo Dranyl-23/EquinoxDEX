@@ -136,7 +136,7 @@ export function MarketHeader({
                   onClick={() => handleSelect(m.id)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-all text-left ${
                     activeMarket === m.id
-                      ? 'bg-brand/20 text-brand border border-brand/30 shadow-md'
+                      ? 'bg-brand/20 text-brand font-bold'
                       : 'text-white hover:bg-border/40'
                   }`}
                 >
