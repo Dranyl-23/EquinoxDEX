@@ -11,11 +11,44 @@ export interface MarketHeaderProps {
   onSelectMarket?: (market: string) => void;
 }
 
+const TokenLogo = ({ id }: { id: string }) => {
+  if (id === 'EQX-PERP') {
+    return (
+      <div className="w-7 h-7 rounded-full bg-linear-to-tr from-purple-600 via-indigo-500 to-cyan-400 p-[1.5px] shadow-lg shadow-purple-500/30 flex items-center justify-center">
+        <div className="w-full h-full rounded-full bg-panel flex items-center justify-center font-bold text-xs text-transparent bg-clip-text bg-linear-to-r from-purple-400 to-cyan-300">
+          EQX
+        </div>
+      </div>
+    );
+  }
+  if (id === 'XLM-PERP') {
+    return (
+      <div className="w-7 h-7 rounded-full bg-linear-to-tr from-cyan-500 to-blue-600 p-[1.5px] shadow-lg shadow-cyan-500/30 flex items-center justify-center">
+        <div className="w-full h-full rounded-full bg-panel flex items-center justify-center font-extrabold text-[11px] text-cyan-300">
+          ★
+        </div>
+      </div>
+    );
+  }
+  if (id === 'BTC-PERP') {
+    return (
+      <div className="w-7 h-7 rounded-full bg-amber-500 text-black font-black flex items-center justify-center text-sm shadow-lg shadow-amber-500/30">
+        ₿
+      </div>
+    );
+  }
+  return (
+    <div className="w-7 h-7 rounded-full bg-linear-to-tr from-indigo-500 to-purple-400 text-white font-bold flex items-center justify-center text-xs shadow-lg shadow-indigo-500/30">
+      Ξ
+    </div>
+  );
+};
+
 const MARKETS = [
-  { id: 'EQX-PERP', name: 'EQX-PERP', badge: 'Flagship Token', icon: '🪐' },
-  { id: 'XLM-PERP', name: 'XLM-PERP', badge: 'Stellar Native', icon: '🚀' },
-  { id: 'BTC-PERP', name: 'BTC-PERP', badge: 'Cross-Margin', icon: '⚡' },
-  { id: 'ETH-PERP', name: 'ETH-PERP', badge: 'Cross-Margin', icon: '💎' },
+  { id: 'EQX-PERP', name: 'EQX-PERP', badge: 'Flagship Token' },
+  { id: 'XLM-PERP', name: 'XLM-PERP', badge: 'Stellar Native' },
+  { id: 'BTC-PERP', name: 'BTC-PERP', badge: 'Cross-Margin' },
+  { id: 'ETH-PERP', name: 'ETH-PERP', badge: 'Cross-Margin' },
 ];
 
 export function MarketHeader({
@@ -49,9 +82,9 @@ export function MarketHeader({
         <div className="relative">
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-2 text-2xl font-bold text-white hover:text-brand transition-colors focus:outline-none"
+            className="flex items-center gap-2.5 text-2xl font-bold text-white hover:text-brand transition-colors focus:outline-none"
           >
-            <span>{currentObj.icon}</span>
+            <TokenLogo id={currentObj.id} />
             <span>{currentObj.name}</span>
             <span className="text-xs text-muted">▼</span>
             <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
@@ -75,8 +108,8 @@ export function MarketHeader({
                       : 'text-white hover:bg-border/40'
                   }`}
                 >
-                  <span className="flex items-center gap-2">
-                    <span>{m.icon}</span>
+                  <span className="flex items-center gap-2.5">
+                    <TokenLogo id={m.id} />
                     <span className="font-bold">{m.name}</span>
                   </span>
                   <span className="text-[10px] text-muted font-mono">{m.badge}</span>
