@@ -411,7 +411,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
     <div className="relative w-full h-full flex pt-12 pb-8 [&_#tv-attr-logo]:hidden [&_a]:hidden overflow-hidden">
       
       {/* Timeframe Selector Toolbar */}
-      <div className="absolute top-2.5 left-2 md:left-14 z-20 flex items-center gap-1 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg p-1 shadow-lg">
+      <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg p-1 shadow-lg">
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
@@ -581,7 +581,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
       </div>
 
       {/* Bottom Historical Date Range & Go To Date Toolbar */}
-      <div className="absolute bottom-1 left-2 md:left-14 z-20 flex items-center gap-3 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg px-3 py-1 shadow-lg text-xs font-mono">
+      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg px-3 py-1 shadow-lg text-xs font-mono">
         <div className="flex items-center gap-1.5 text-muted">
           {DATE_RANGES.map((rng) => (
             <button
