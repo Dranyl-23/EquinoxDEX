@@ -427,6 +427,13 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
         ))}
         <div className="w-px h-4 bg-border/60 mx-1" />
         <button
+          onClick={() => setShowTools(!showTools)}
+          className={`p-1 rounded cursor-pointer transition-colors ${showTools ? 'text-brand bg-brand/10' : 'text-muted hover:text-white hover:bg-border/40'}`}
+          title="Toggle Drawing Tools"
+        >
+          <PenTool className="w-3.5 h-3.5" />
+        </button>
+        <button
           onClick={() => setShowRightScale(!showRightScale)}
           className={`p-1 rounded cursor-pointer transition-colors ${showRightScale ? 'text-muted hover:text-white hover:bg-border/40' : 'text-danger bg-danger/10 hover:bg-danger/20'}`}
           title="Toggle Price Scale (Y-Axis)"
@@ -442,20 +449,9 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
       </div>
 
       {/* Left Pro Chart Drawing Toolbar */}
-      <div className="absolute left-2 top-12 z-20 flex flex-col gap-1 bg-panel/90 backdrop-blur-xl border border-border/70 rounded-xl p-1 shadow-2xl max-h-[220px] md:max-h-[80%] overflow-y-auto custom-scrollbar">
-        <button
-          onClick={() => setShowTools(!showTools)}
-          className="p-2 rounded-lg transition-colors cursor-pointer text-brand bg-brand/10 hover:bg-brand/20 flex items-center justify-center"
-          title={showTools ? "Hide Tools" : "Show Tools"}
-        >
-          {showTools ? <ChevronDown className="w-4 h-4" /> : <PenTool className="w-4 h-4" />}
-        </button>
-
-        {showTools && (
-          <>
-            <div className="w-full h-px bg-border/60 my-0.5" />
-            
-            <button
+      {showTools && (
+        <div className="absolute left-2 top-12 z-20 flex flex-col gap-1 bg-panel/90 backdrop-blur-xl border border-border/70 rounded-xl p-1 shadow-2xl max-h-[220px] md:max-h-[80%] overflow-y-auto custom-scrollbar">
+          <button
               onClick={() => setActiveTool('pointer')}
               className="p-2 rounded-lg transition-colors cursor-pointer relative group text-muted hover:text-white hover:bg-background"
               title="Pointer / Crosshair"
@@ -555,19 +551,18 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
               <Magnet className="w-4 h-4" />
             </button>
 
-            <button
-              onClick={() => {
-                setDrawings([]);
-                setCurrentLine(null);
-              }}
-              className="p-2 rounded-lg text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-              title="Clear All Drawings"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </>
-        )}
-      </div>
+          <button
+            onClick={() => {
+              setDrawings([]);
+              setCurrentLine(null);
+            }}
+            className="p-2 rounded-lg text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+            title="Clear All Drawings"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Chart Canvas & Interactive Drawing Overlay Container */}
       <div 
