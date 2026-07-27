@@ -114,8 +114,8 @@ export function MarketHeader({
   };
 
   return (
-    <div className="flex items-center justify-between border-b border-border/50 px-6 py-4 bg-panel/30 backdrop-blur-md z-30 relative">
-      <div className="flex items-center gap-4">
+    <div className="flex flex-col md:flex-row md:items-center items-start justify-between border-b border-border/50 px-4 md:px-6 py-4 bg-panel/30 backdrop-blur-md z-30 relative gap-4">
+      <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
         {/* Interactive Market Selector Dropdown */}
         <button
           onClick={onOpenMarketModal || (() => setIsOpen(!isOpen))}
@@ -142,7 +142,7 @@ export function MarketHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-6 text-sm">
+      <div className="flex flex-wrap items-center gap-4 md:gap-6 text-sm w-full md:w-auto border-t md:border-none border-border/50 pt-3 md:pt-0">
         <div>
           <div className="text-muted text-xs">{t('openInterest') || 'Global Skew'}</div>
           <div className={`font-medium ${isSkewLong ? 'text-brand' : isSkewShort ? 'text-danger' : 'text-white'}`}>

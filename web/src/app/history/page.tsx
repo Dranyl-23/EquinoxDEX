@@ -47,8 +47,7 @@ export default function TradeHistoryPage() {
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-background">
-      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-400 mx-auto w-full">
-
+      <div className="flex flex-col flex-1 p-4 md:p-6 lg:p-10 max-w-7xl mx-auto w-full">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-2">
           <h2 className="text-3xl font-bold text-white">{t('tradeLog')}</h2>

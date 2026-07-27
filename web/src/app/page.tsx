@@ -398,11 +398,11 @@ export default function Home() {
   const firstPos = positions[0] || null;
 
   return (
-    <main className="flex h-screen w-full flex-col overflow-hidden">
+    <main className="flex min-h-[100dvh] w-full flex-col overflow-y-auto lg:overflow-hidden">
       {/* Main Trading Area */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 lg:overflow-hidden">
         {/* Left Side: Chart and Positions */}
-        <div className="flex flex-1 flex-col border-r border-border">
+        <div className="flex flex-1 flex-col border-b lg:border-b-0 lg:border-r border-border min-h-[600px] lg:min-h-0">
           <div className="flex-1 bg-background flex flex-col relative overflow-hidden">
             <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand/10 blur-[100px] rounded-full pointer-events-none"></div>
             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-brand/5 blur-[100px] rounded-full pointer-events-none"></div>
