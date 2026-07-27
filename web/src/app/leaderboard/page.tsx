@@ -55,8 +55,7 @@ export default function Leaderboard() {
         </div>
 
         {/* Leaderboard Table */}
-        <div className="bg-panel border border-border rounded-xl shadow-2xl overflow-hidden relative">
-          <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-brand via-purple-500 to-brand"></div>
+        <div className="bg-panel border border-border/60 rounded-xl overflow-hidden relative">
           
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -135,7 +134,7 @@ export default function Leaderboard() {
 
         {/* Connected User Sticky Bar */}
         {publicKey && (
-          <div className="mt-8 bg-background border border-brand/30 rounded-lg p-6 flex flex-col md:flex-row justify-between items-center gap-4 shadow-[0_0_15px_rgba(0,255,150,0.1)] relative overflow-hidden">
+          <div className="mt-8 bg-panel/50 border border-border/60 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
             <div className="absolute inset-0 bg-brand/5"></div>
             <div className="relative z-10 flex items-center gap-4">
               <div className="w-12 h-12 bg-brand/20 rounded-full flex items-center justify-center border border-brand/50 text-brand">
