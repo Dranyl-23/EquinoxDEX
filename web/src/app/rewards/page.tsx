@@ -27,35 +27,41 @@ export default function RewardsPage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full flex-col bg-background text-white">
-      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full gap-8">
+    <main className="flex min-h-screen w-full flex-col bg-background">
+      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-400 mx-auto w-full">
         
         {/* Header */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-amber-500 to-yellow-400 flex items-center justify-center shadow-lg shadow-amber-500/20 text-black font-extrabold text-lg">
-              🎁
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-                Referrals & Fee Discount Rewards
-                <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                  VIP Kickbacks
-                </span>
-              </h1>
-              <p className="text-sm text-muted mt-1">
-                Invite friends to EquinoxDEX. Earn 20% of their trading fees forever and unlock up to 15% fee discounts.
-              </p>
-            </div>
+        <div className="mb-8 flex flex-col gap-2">
+          <h2 className="text-3xl font-bold text-white">Referrals & Rewards</h2>
+          <p className="text-muted">
+            Invite friends to EquinoxDEX. Earn 20% of their trading fees forever and unlock up to 15% fee discounts.
+          </p>
+        </div>
+
+        {/* Global Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Referred Traders</div>
+            <div className="text-2xl font-mono font-bold text-white">{totalReferred}</div>
+          </div>
+
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Unclaimed Fee Kickback</div>
+            <div className="text-2xl font-mono font-bold text-green-500">${unclaimedKickback.toFixed(2)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+          </div>
+
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Lifetime Earned</div>
+            <div className="text-2xl font-mono font-bold text-white">${lifetimeEarnings.toFixed(2)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
         </div>
 
-        {/* Hero Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Main Grid: 2/3 Referral Link Generator, 1/3 VIP Matrix */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
-          {/* Left 2 Cols: Referral Link Generator */}
-          <div className="md:col-span-2 bg-panel/70 border border-border/60 rounded-2xl p-6 backdrop-blur-xl flex flex-col gap-6 shadow-2xl">
-            <h2 className="text-lg font-bold text-white">Your Unique Referral Link</h2>
+          {/* Left Col (2 cols): Referral Generator */}
+          <div className="lg:col-span-2 bg-panel border border-border rounded-lg p-6 flex flex-col gap-6">
+            <h3 className="text-lg font-semibold text-white border-b border-border pb-4">Your Unique Referral Link</h3>
 
             <div className="flex flex-col gap-3">
               <label className="text-xs text-muted font-mono">Share this link to earn 20% fee rebate on every trade:</label>
@@ -64,49 +70,32 @@ export default function RewardsPage() {
                   type="text"
                   readOnly
                   value={refUrl}
-                  className="flex-1 bg-background border border-border/70 rounded-xl px-4 py-3 text-white outline-none font-mono text-sm"
+                  className="flex-1 bg-background border border-border rounded-lg px-4 py-3 text-white outline-none font-mono text-sm"
                 />
                 <button
                   onClick={handleCopyLink}
-                  className="px-6 py-3 bg-linear-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20"
+                  className="px-6 py-3 bg-brand hover:bg-brand-hover text-white font-bold rounded-lg text-xs transition-all shadow-sm"
                 >
                   {copied ? '✓ Copied!' : 'Copy Link'}
                 </button>
               </div>
             </div>
 
-            {/* Earnings Stats */}
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border/60 text-center font-mono">
-              <div className="bg-background/80 p-4 rounded-xl border border-border/50">
-                <div className="text-xs text-muted">Referred Traders</div>
-                <div className="text-xl font-bold text-white mt-1">{totalReferred}</div>
-              </div>
-
-              <div className="bg-background/80 p-4 rounded-xl border border-border/50">
-                <div className="text-xs text-muted">Unclaimed Kickback</div>
-                <div className="text-xl font-bold text-emerald-400 mt-1">${unclaimedKickback.toFixed(2)} USDC</div>
-              </div>
-
-              <div className="bg-background/80 p-4 rounded-xl border border-border/50">
-                <div className="text-xs text-muted">Lifetime Earned</div>
-                <div className="text-xl font-bold text-white mt-1">${lifetimeEarnings.toFixed(2)} USDC</div>
-              </div>
-            </div>
-
-            {/* Claim Button */}
+            {/* Claim Notification */}
             {claimed && (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3 rounded-xl text-xs font-mono text-center">
+              <div className="bg-green-500/10 border border-green-500/30 text-green-500 p-3 rounded text-xs font-mono text-center">
                 ✓ Successfully claimed ${unclaimedKickback.toFixed(2)} USDC kickback to your Cross-Margin Account!
               </div>
             )}
 
+            {/* Claim Button */}
             <button
               onClick={handleClaimRewards}
               disabled={!publicKey || unclaimedKickback <= 0}
-              className={`w-full py-3.5 rounded-xl font-bold text-xs transition-all text-center border shadow-lg ${
+              className={`w-full py-3.5 rounded-lg font-bold text-xs transition-all text-center border ${
                 !publicKey || unclaimedKickback <= 0
-                  ? 'bg-panel text-muted/60 border-border/60 cursor-not-allowed'
-                  : 'bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold border-emerald-400/30 shadow-emerald-500/25 active:scale-[0.99]'
+                  ? 'bg-panel text-muted/60 border-border cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-400 text-black font-bold border-green-400 shadow-sm active:scale-[0.99]'
               }`}
             >
               {!publicKey ? 'Connect Wallet to Claim' : `Claim $${unclaimedKickback.toFixed(2)} USDC Kickback`}
@@ -114,16 +103,16 @@ export default function RewardsPage() {
           </div>
 
           {/* Right Col: VIP Fee Discount Tier Matrix */}
-          <div className="bg-panel/70 border border-border/60 rounded-2xl p-6 backdrop-blur-xl flex flex-col gap-5 shadow-xl">
-            <h2 className="text-base font-bold text-white flex items-center justify-between">
-              <span>VIP Fee Discount Tiers</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">
+          <div className="bg-panel border border-border rounded-lg p-6 flex flex-col gap-5">
+            <h3 className="text-lg font-semibold text-white border-b border-border pb-4 flex items-center justify-between">
+              <span>VIP Fee Tiers</span>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-brand/20 text-brand border border-brand/30">
                 Tier 2 Active
               </span>
-            </h2>
+            </h3>
 
             <div className="flex flex-col gap-3 font-mono text-xs">
-              <div className="bg-background/80 border border-border/50 rounded-xl p-3.5 flex justify-between items-center">
+              <div className="bg-background rounded-lg p-3.5 border border-border flex justify-between items-center">
                 <div>
                   <div className="font-bold text-white">Tier 1 (Base)</div>
                   <div className="text-[10px] text-muted">$0 - $50k 30d Vol</div>
@@ -131,20 +120,20 @@ export default function RewardsPage() {
                 <div className="text-muted font-bold">5% Off</div>
               </div>
 
-              <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3.5 flex justify-between items-center text-amber-300">
+              <div className="bg-brand/10 border border-brand/40 rounded-lg p-3.5 flex justify-between items-center text-brand">
                 <div>
-                  <div className="font-bold text-amber-300">Tier 2 (Pro) ✓</div>
-                  <div className="text-[10px] text-amber-300/70">$50k - $250k 30d Vol</div>
+                  <div className="font-bold text-brand">Tier 2 (Pro) ✓</div>
+                  <div className="text-[10px] text-brand/70">$50k - $250k 30d Vol</div>
                 </div>
-                <div className="font-bold text-emerald-400">10% Off</div>
+                <div className="font-bold text-green-500">10% Off</div>
               </div>
 
-              <div className="bg-background/80 border border-border/50 rounded-xl p-3.5 flex justify-between items-center">
+              <div className="bg-background rounded-lg p-3.5 border border-border flex justify-between items-center">
                 <div>
                   <div className="font-bold text-white">Tier 3 (Institutional)</div>
                   <div className="text-[10px] text-muted">$250k+ 30d Vol</div>
                 </div>
-                <div className="text-emerald-400 font-bold">15% Off</div>
+                <div className="text-green-500 font-bold">15% Off</div>
               </div>
             </div>
 

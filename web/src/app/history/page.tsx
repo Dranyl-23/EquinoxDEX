@@ -77,74 +77,56 @@ export default function TradeHistoryPage() {
   const totalRealizedPnl = MOCK_HISTORY.reduce((acc, curr) => acc + curr.pnlUsdc, 0);
 
   return (
-    <main className="flex min-h-screen w-full flex-col bg-background text-white">
-      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full gap-8">
+    <main className="flex min-h-screen w-full flex-col bg-background">
+      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-400 mx-auto w-full">
         
         {/* Header */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 8v4l3 3" />
-                <circle cx="12" cy="12" r="9" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-                Trade History & Analytics
-                <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                  On-Chain Verified
-                </span>
-              </h1>
-              <p className="text-sm text-muted mt-1">
-                Lifetime trade audit logs, execution fill history, and performance statistics on EquinoxDEX.
-              </p>
-            </div>
-          </div>
+        <div className="mb-8 flex flex-col gap-2">
+          <h2 className="text-3xl font-bold text-white">Trade History & Audit</h2>
+          <p className="text-muted">
+            Lifetime trade audit logs, execution fill history, and performance statistics on EquinoxDEX.
+          </p>
         </div>
 
-        {/* Analytics Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">Total Realized PnL</div>
-            <div className="text-2xl font-mono font-bold text-emerald-400 mt-2">+${totalRealizedPnl.toFixed(2)} USDC</div>
-            <div className="text-[11px] text-muted font-mono mt-1">Net Lifetime Profits</div>
+        {/* Global Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Total Realized PnL</div>
+            <div className="text-2xl font-mono font-bold text-green-500">+${totalRealizedPnl.toFixed(2)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
 
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">Win Rate</div>
-            <div className="text-2xl font-mono font-bold text-white mt-2">{winRate}%</div>
-            <div className="text-[11px] text-emerald-400 font-mono mt-1">{winningTrades} of {totalTrades} Winning Trades</div>
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Win Rate</div>
+            <div className="text-2xl font-mono font-bold text-white">{winRate}%</div>
+            <div className="text-xs text-muted mt-1">{winningTrades} of {totalTrades} winning trades</div>
           </div>
 
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">Total Trades Executed</div>
-            <div className="text-2xl font-mono font-bold text-white mt-2">{totalTrades}</div>
-            <div className="text-[11px] text-purple-300 font-mono mt-1">100% 1-Click Execution</div>
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Total Trades Executed</div>
+            <div className="text-2xl font-mono font-bold text-white">{totalTrades}</div>
           </div>
 
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">Average Profit / Trade</div>
-            <div className="text-2xl font-mono font-bold text-emerald-400 mt-2">+${(totalRealizedPnl / totalTrades).toFixed(2)} USDC</div>
-            <div className="text-[11px] text-muted font-mono mt-1">Per Closed Position</div>
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Average Profit / Trade</div>
+            <div className="text-2xl font-mono font-bold text-green-500">+${(totalRealizedPnl / totalTrades).toFixed(2)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
         </div>
 
         {/* Trade Logs Table Card */}
-        <div className="bg-panel/70 border border-border/60 rounded-2xl overflow-hidden backdrop-blur-xl shadow-2xl flex flex-col">
+        <div className="bg-panel border border-border rounded-lg overflow-hidden flex flex-col">
           
           {/* Table Filters */}
-          <div className="flex justify-between items-center px-6 py-4 border-b border-border/60 bg-panel/30">
-            <h2 className="text-base font-bold text-white">Execution Logs</h2>
+          <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-background/50">
+            <h3 className="text-base font-semibold text-white">Execution Logs</h3>
             <div className="flex gap-2">
               {['ALL', 'EQX-PERP', 'XLM-PERP', 'BTC-PERP'].map((asset) => (
                 <button
                   key={asset}
                   onClick={() => setSelectedAsset(asset)}
-                  className={`px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-all ${
+                  className={`px-3 py-1 text-xs font-mono font-semibold rounded transition-all ${
                     selectedAsset === asset
                       ? 'bg-brand text-white shadow-sm'
-                      : 'bg-background text-muted hover:text-white border border-border/60'
+                      : 'bg-background text-muted hover:text-white border border-border'
                   }`}
                 >
                   {asset}
@@ -155,46 +137,46 @@ export default function TradeHistoryPage() {
 
           {/* Table Content */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider font-mono">
-                <tr>
-                  <th className="px-6 py-3.5 font-semibold">Date & Time</th>
-                  <th className="px-6 py-3.5 font-semibold">Market</th>
-                  <th className="px-6 py-3.5 font-semibold">Type</th>
-                  <th className="px-6 py-3.5 font-semibold">Entry / Exit</th>
-                  <th className="px-6 py-3.5 font-semibold">Margin Used</th>
-                  <th className="px-6 py-3.5 font-semibold">Realized PnL</th>
-                  <th className="px-6 py-3.5 font-semibold text-right">Soroban TX</th>
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border bg-background/50 text-muted text-xs uppercase tracking-wider font-mono">
+                  <th className="py-4 px-6 font-semibold">Date & Time</th>
+                  <th className="py-4 px-6 font-semibold">Market</th>
+                  <th className="py-4 px-6 font-semibold">Type</th>
+                  <th className="py-4 px-6 font-semibold">Entry / Exit</th>
+                  <th className="py-4 px-6 font-semibold">Margin Used</th>
+                  <th className="py-4 px-6 font-semibold">Realized PnL</th>
+                  <th className="py-4 px-6 font-semibold text-right">Soroban TX</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/40 font-mono">
+              <tbody className="divide-y divide-border/50 font-mono">
                 {!publicKey ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-muted text-sm font-sans">
+                    <td colSpan={7} className="py-12 text-center text-muted text-sm font-sans">
                       Connect wallet to view trade history.
                     </td>
                   </tr>
                 ) : (
                   filteredHistory.map((row) => (
-                    <tr key={row.id} className="hover:bg-panel/40 transition-colors">
-                      <td className="px-6 py-4 text-xs text-muted">{row.timestamp}</td>
-                      <td className="px-6 py-4 font-bold text-white">{row.market}</td>
-                      <td className="px-6 py-4">
-                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded ${
-                          row.type === 'Long' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    <tr key={row.id} className="hover:bg-background/40 transition-colors">
+                      <td className="py-4 px-6 text-xs text-muted">{row.timestamp}</td>
+                      <td className="py-4 px-6 font-bold text-white">{row.market}</td>
+                      <td className="py-4 px-6">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                          row.type === 'Long' ? 'bg-green-500/20 text-green-500 border border-green-500/30' : 'bg-danger/20 text-danger border border-danger/30'
                         }`}>
                           {row.type}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-white">
+                      <td className="py-4 px-6 text-xs text-white">
                         ${row.entryPrice.toLocaleString()} → ${row.exitPrice.toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-white">${row.marginUsdc} USDC</td>
-                      <td className="px-6 py-4 font-bold text-emerald-400">
+                      <td className="py-4 px-6 text-white">${row.marginUsdc} USDC</td>
+                      <td className="py-4 px-6 font-bold text-green-500">
                         +${row.pnlUsdc.toFixed(2)} ({row.pnlPercent.toFixed(2)}%)
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-xs text-purple-400 hover:text-purple-300 underline cursor-pointer">
+                      <td className="py-4 px-6 text-right">
+                        <span className="text-xs text-brand hover:underline cursor-pointer">
                           {row.txHash} ↗
                         </span>
                       </td>

@@ -18,11 +18,11 @@ export default function VaultsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [txSuccessMsg, setTxSuccessMsg] = useState<string | null>(null);
 
-  // Vault Stats (Simulated Live Protocol State)
+  // Vault Stats
   const elpPrice = 1.142; // 1 ELP = 1.142 USDC
-  const tvl = 3850000; // $3.85M TVL
-  const apy = 24.8; // 24.8% APY
-  const dailyYield = 4820; // $4,820 / day
+  const tvl = 3850000;
+  const apy = 24.8;
+  const dailyYield = 4820;
 
   useEffect(() => {
     if (!publicKey) return;
@@ -75,81 +75,54 @@ export default function VaultsPage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full flex-col bg-background text-white">
-      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full gap-8">
+    <main className="flex min-h-screen w-full flex-col bg-background">
+      <div className="flex flex-col flex-1 p-6 lg:p-10 max-w-400 mx-auto w-full">
         
         {/* Header */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect width="18" height="18" x="3" y="3" rx="2" />
-                <circle cx="12" cy="12" r="3" />
-                <path d="m14.5 9.5-5 5" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-                EQX Liquidity Vault (ELP)
-                <span className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300">
-                  Real Yield Engine
-                </span>
-              </h1>
-              <p className="text-sm text-muted mt-1">
-                Deposit USDC to supply liquidity for EquinoxDEX trades. Earn real yield from 60% of protocol fees + liquidation surpluses.
-              </p>
-            </div>
+        <div className="mb-8 flex flex-col gap-2">
+          <h2 className="text-3xl font-bold text-white">EQX Liquidity Vault (ELP)</h2>
+          <p className="text-muted">
+            Deposit USDC to supply liquidity for EquinoxDEX trades. Earn real yield from 60% of protocol fees + liquidation surpluses.
+          </p>
+        </div>
+
+        {/* Global Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Total Value Locked (TVL)</div>
+            <div className="text-2xl font-mono font-bold text-white">${tvl.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+          </div>
+
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">Real Yield APY (7d)</div>
+            <div className="text-2xl font-mono font-bold text-green-500">{apy}% APY</div>
+            <div className="text-xs text-muted mt-1">Auto-compounded daily</div>
+          </div>
+
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">ELP Token Price</div>
+            <div className="text-2xl font-mono font-bold text-white">${elpPrice.toFixed(4)} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
+          </div>
+
+          <div className="bg-panel border border-border rounded-lg p-5">
+            <div className="text-sm text-muted mb-1">24h Yield Distributed</div>
+            <div className="text-2xl font-mono font-bold text-green-500">${dailyYield.toLocaleString()} <span className="text-sm text-muted font-sans font-normal">USDC</span></div>
           </div>
         </div>
 
-        {/* Hero Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md relative overflow-hidden">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">Total Value Locked (TVL)</div>
-            <div className="text-2xl font-mono font-bold text-white mt-2">${tvl.toLocaleString()} USDC</div>
-            <div className="text-[11px] text-emerald-400 font-mono mt-1 flex items-center gap-1">
-              <span>▲ +8.4%</span> past 7 days
-            </div>
-          </div>
-
-          <div className="bg-panel/70 border border-purple-500/30 rounded-xl p-5 backdrop-blur-md relative overflow-hidden bg-linear-to-b from-purple-500/10 to-transparent">
-            <div className="text-xs text-purple-300 font-medium uppercase tracking-wider">Real Yield APY (7d)</div>
-            <div className="text-2xl font-mono font-bold text-purple-400 mt-2">{apy}% APY</div>
-            <div className="text-[11px] text-purple-300/80 font-mono mt-1">
-              Auto-Compounded Daily
-            </div>
-          </div>
-
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md relative overflow-hidden">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">ELP Token Price</div>
-            <div className="text-2xl font-mono font-bold text-white mt-2">${elpPrice.toFixed(4)} USDC</div>
-            <div className="text-[11px] text-emerald-400 font-mono mt-1">
-              +14.20% Lifetime Growth
-            </div>
-          </div>
-
-          <div className="bg-panel/70 border border-border/60 rounded-xl p-5 backdrop-blur-md relative overflow-hidden">
-            <div className="text-xs text-muted font-medium uppercase tracking-wider">24h Yield Distributed</div>
-            <div className="text-2xl font-mono font-bold text-emerald-400 mt-2">${dailyYield.toLocaleString()} USDC</div>
-            <div className="text-[11px] text-muted font-mono mt-1">
-              Direct to Vault Pool
-            </div>
-          </div>
-        </div>
-
-        {/* Main Grid: Action Panel & User Position */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Grid: 2/3 Action Panel, 1/3 User Position */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
-          {/* Left Column (2 cols): Deposit / Redeem Card */}
-          <div className="lg:col-span-2 bg-panel/70 border border-border/60 rounded-2xl p-6 backdrop-blur-xl flex flex-col gap-6 shadow-2xl">
+          {/* Left Col (2 cols): Deposit / Redeem Panel */}
+          <div className="lg:col-span-2 bg-panel border border-border rounded-lg p-6 flex flex-col gap-6">
             
-            {/* Action Tabs */}
-            <div className="flex border-b border-border/60 pb-3 gap-6 font-semibold text-sm">
+            {/* Tabs */}
+            <div className="flex border-b border-border pb-3 gap-6 font-semibold text-sm">
               <button
                 onClick={() => { setActiveTab('deposit'); setAmountInput(''); setTxSuccessMsg(null); }}
-                className={`pb-2 transition-all flex items-center gap-2 border-b-2 ${
+                className={`pb-2 transition-all border-b-2 ${
                   activeTab === 'deposit'
-                    ? 'text-purple-400 border-purple-500 font-bold'
+                    ? 'text-white border-brand font-bold'
                     : 'text-muted hover:text-white border-transparent'
                 }`}
               >
@@ -158,9 +131,9 @@ export default function VaultsPage() {
 
               <button
                 onClick={() => { setActiveTab('redeem'); setAmountInput(''); setTxSuccessMsg(null); }}
-                className={`pb-2 transition-all flex items-center gap-2 border-b-2 ${
+                className={`pb-2 transition-all border-b-2 ${
                   activeTab === 'redeem'
-                    ? 'text-purple-400 border-purple-500 font-bold'
+                    ? 'text-white border-brand font-bold'
                     : 'text-muted hover:text-white border-transparent'
                 }`}
               >
@@ -186,7 +159,7 @@ export default function VaultsPage() {
                   placeholder="0.00"
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
-                  className="w-full bg-background border border-border/70 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors font-mono text-lg"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-3 text-white outline-none focus:border-brand transition-colors font-mono text-base"
                 />
                 <span className="absolute right-4 top-3.5 text-sm font-bold text-muted font-mono">
                   {activeTab === 'deposit' ? 'USDC' : 'ELP'}
@@ -203,7 +176,7 @@ export default function VaultsPage() {
                       const maxVal = activeTab === 'deposit' ? availableUsdc : userElpBalance;
                       setAmountInput(((maxVal * pct) / 100).toFixed(2));
                     }}
-                    className="flex-1 py-1.5 text-xs font-mono font-medium rounded-lg bg-background border border-border/60 text-muted hover:text-white hover:border-purple-500/50 transition-colors"
+                    className="flex-1 py-1.5 text-xs font-mono font-medium rounded bg-background border border-border text-muted hover:text-white hover:border-brand transition-colors"
                   >
                     {pct === 100 ? 'MAX' : `${pct}%`}
                   </button>
@@ -211,10 +184,10 @@ export default function VaultsPage() {
               </div>
 
               {/* Conversion Preview Card */}
-              <div className="bg-background/80 border border-border/50 rounded-xl p-4 flex flex-col gap-2 text-xs font-mono">
+              <div className="bg-background rounded-lg p-4 border border-border flex flex-col gap-2 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-muted">You Will Receive:</span>
-                  <span className="font-bold text-purple-300">
+                  <span className="font-bold text-white">
                     ~{elpToReceive.toFixed(4)} {activeTab === 'deposit' ? 'ELP' : 'USDC'}
                   </span>
                 </div>
@@ -224,13 +197,13 @@ export default function VaultsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted">Deposit Fee:</span>
-                  <span className="text-emerald-400 font-bold">0.00% (Zero Fee)</span>
+                  <span className="text-green-500 font-bold">0.00% (Zero Fee)</span>
                 </div>
               </div>
 
               {/* Success Notification */}
               {txSuccessMsg && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3 rounded-xl text-xs font-mono text-center animate-fadeIn">
+                <div className="bg-green-500/10 border border-green-500/30 text-green-500 p-3 rounded text-xs font-mono text-center">
                   ✓ {txSuccessMsg}
                 </div>
               )}
@@ -239,10 +212,10 @@ export default function VaultsPage() {
               <button
                 onClick={activeTab === 'deposit' ? handleDeposit : handleRedeem}
                 disabled={!publicKey || amountVal <= 0 || isSubmitting}
-                className={`w-full py-4 rounded-xl font-bold text-sm transition-all text-center border shadow-lg ${
+                className={`w-full py-3.5 rounded-lg font-bold text-sm transition-all text-center border ${
                   !publicKey || amountVal <= 0 || isSubmitting
-                    ? 'bg-panel/90 text-muted/60 border-border/60 cursor-not-allowed'
-                    : 'bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border-purple-400/30 shadow-purple-500/25 active:scale-[0.99]'
+                    ? 'bg-panel text-muted/60 border-border cursor-not-allowed'
+                    : 'bg-brand hover:bg-brand-hover text-white border-brand active:scale-[0.99]'
                 }`}
               >
                 {isSubmitting
@@ -258,19 +231,13 @@ export default function VaultsPage() {
             </div>
           </div>
 
-          {/* Right Column (1 col): My Staked Position & Yield Breakdown */}
+          {/* Right Col (1 col): My Position & Yield breakdown */}
           <div className="flex flex-col gap-6">
             
-            {/* My Position Card */}
-            <div className="bg-panel/70 border border-purple-500/30 rounded-2xl p-6 backdrop-blur-xl flex flex-col gap-4 shadow-xl relative overflow-hidden bg-linear-to-b from-purple-500/10 to-transparent">
-              <h3 className="text-base font-bold text-white flex items-center justify-between">
-                <span>My Vault Position</span>
-                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                  Earning 24.8% APY
-                </span>
-              </h3>
+            <div className="bg-panel border border-border rounded-lg p-6 flex flex-col gap-4">
+              <h3 className="text-lg font-semibold text-white border-b border-border pb-4">My Position</h3>
 
-              <div className="flex flex-col gap-3 pt-2 border-t border-border/50 text-sm font-mono">
+              <div className="flex flex-col gap-3 font-mono text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted">My ELP Tokens:</span>
                   <span className="font-bold text-white">{userElpBalance.toFixed(2)} ELP</span>
@@ -280,41 +247,36 @@ export default function VaultsPage() {
                   <span className="font-bold text-white">${(userElpBalance * elpPrice).toFixed(2)} USDC</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted">Total Real Yield Earned:</span>
-                  <span className="font-bold text-emerald-400">+${userEarnedYield.toFixed(2)} USDC</span>
+                  <span className="text-muted">Real Yield Earned:</span>
+                  <span className="font-bold text-green-500">+${userEarnedYield.toFixed(2)} USDC</span>
                 </div>
               </div>
             </div>
 
-            {/* Yield Distribution Breakdown */}
-            <div className="bg-panel/70 border border-border/60 rounded-2xl p-6 backdrop-blur-xl flex flex-col gap-4 shadow-xl">
-              <h3 className="text-sm font-bold text-white">Vault Yield Sources</h3>
+            <div className="bg-panel border border-border rounded-lg p-6 flex flex-col gap-4">
+              <h3 className="text-sm font-semibold text-white">Vault Yield Sources</h3>
               
               <div className="flex flex-col gap-3 text-xs">
                 <div>
-                  <div className="flex justify-between text-muted mb-1">
-                    <span>Protocol Trading Fees</span>
-                    <span className="text-purple-300 font-mono font-bold">60%</span>
+                  <div className="flex justify-between text-muted mb-1 font-mono">
+                    <span>Protocol Fees</span>
+                    <span className="text-white font-bold">60%</span>
                   </div>
-                  <div className="w-full h-2 bg-background rounded-full overflow-hidden">
-                    <div className="h-full bg-linear-to-r from-purple-500 to-indigo-500 w-[60%]"></div>
+                  <div className="w-full h-2 bg-background rounded overflow-hidden">
+                    <div className="h-full bg-brand w-[60%]"></div>
                   </div>
                 </div>
 
                 <div>
-                  <div className="flex justify-between text-muted mb-1">
-                    <span>Liquidation Counterparty Profit</span>
-                    <span className="text-cyan-300 font-mono font-bold">40%</span>
+                  <div className="flex justify-between text-muted mb-1 font-mono">
+                    <span>Liquidation Surplus</span>
+                    <span className="text-white font-bold">40%</span>
                   </div>
-                  <div className="w-full h-2 bg-background rounded-full overflow-hidden">
-                    <div className="h-full bg-linear-to-r from-cyan-400 to-blue-500 w-[40%]"></div>
+                  <div className="w-full h-2 bg-background rounded overflow-hidden">
+                    <div className="h-full bg-blue-500 w-[40%]"></div>
                   </div>
                 </div>
               </div>
-
-              <p className="text-[11px] text-muted leading-relaxed mt-1">
-                Yield is automatically collected from trading fees and liquidation surpluses, increasing the ELP token value relative to USDC over time.
-              </p>
             </div>
 
           </div>
