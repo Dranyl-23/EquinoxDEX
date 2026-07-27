@@ -29,13 +29,8 @@ export default function Navbar() {
           </Link>
           <Link 
             href="/vaults" 
-            className={`hover:text-brand transition-colors flex items-center gap-1.5 ${pathname === '/vaults' ? 'text-brand font-bold' : ''}`}
+            className={`hover:text-white transition-colors ${pathname === '/vaults' ? 'text-white font-bold' : ''}`}
           >
-            <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <circle cx="12" cy="12" r="3" />
-              <path d="m14.5 9.5-5 5" />
-            </svg>
             Vaults
           </Link>
           <Link 
@@ -46,22 +41,14 @@ export default function Navbar() {
           </Link>
           <Link 
             href="/rewards" 
-            className={`hover:text-brand transition-colors flex items-center gap-1.5 ${pathname === '/rewards' ? 'text-brand font-bold' : ''}`}
+            className={`hover:text-white transition-colors ${pathname === '/rewards' ? 'text-white font-bold' : ''}`}
           >
-            <span className="text-amber-400 font-bold text-xs">🎁</span> Rewards
+            Rewards
           </Link>
           <Link 
             href="/leaderboard" 
-            className={`hover:text-brand transition-colors flex items-center gap-1.5 ${pathname === '/leaderboard' ? 'text-brand font-bold' : ''}`}
+            className={`hover:text-white transition-colors ${pathname === '/leaderboard' ? 'text-white font-bold' : ''}`}
           >
-            <svg className="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-              <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-              <path d="M4 22h16" />
-              <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-              <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-              <path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
-            </svg>
             Leaderboard
           </Link>
         </nav>
