@@ -69,7 +69,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
               ) : (
                 <tr className="border-b border-border/50 last:border-0 hover:bg-panel/30 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="font-bold text-white">BTC-USDC</span>
+                    <span className="font-bold text-white">EQX-PERP</span>
                     <span className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded ${position.is_long ? 'bg-brand/20 text-brand' : 'bg-danger/20 text-danger'}`}>
                       {position.leverage}x {position.is_long ? 'Long' : 'Short'}
                     </span>
