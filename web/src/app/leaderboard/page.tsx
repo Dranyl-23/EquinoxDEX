@@ -123,7 +123,7 @@ export default function Leaderboard() {
                       </td>
                       <td className="py-5 px-6 text-right">
                         <span className={`font-mono text-xl font-bold ${entry.total_pnl >= 0 ? 'text-green-500' : 'text-danger'}`}>
-                          {entry.total_pnl >= 0 ? '+' : '-'}${Math.abs(entry.total_pnl / DECIMALS).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {entry.total_pnl >= 0 ? '+' : '-'}${formatNum(Math.abs(entry.total_pnl / DECIMALS), 2)}
                         </span>
                       </td>
                     </tr>

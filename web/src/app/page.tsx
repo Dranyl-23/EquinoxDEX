@@ -363,30 +363,39 @@ export default function Home() {
     }
   };
 
-  // PnL Calc for active positions
+  // PnL Calc for all active positions
   let pnl = 0;
   let pnlPercent = 0;
   let fundingPnl = 0;
+  let totalMargin = 0;
 
-  const firstPos = positions[0] || null;
-  if (firstPos) {
-    const rawMargin = firstPos.margin / DECIMALS;
-    const rawEntry = firstPos.entry_price / DECIMALS;
-    const priceDiff = firstPos.is_long ? currentPrice - rawEntry : rawEntry - currentPrice;
-    const pricePnl = (priceDiff * rawMargin * firstPos.leverage) / rawEntry;
+  for (const pos of positions) {
+    const rawMargin = pos.margin / DECIMALS;
+    const rawEntry = pos.entry_price / DECIMALS;
+    if (rawEntry <= 0) continue;
+
+    const priceDiff = pos.is_long ? currentPrice - rawEntry : rawEntry - currentPrice;
+    const pricePnl = (priceDiff * rawMargin * pos.leverage) / rawEntry;
 
     const rawCurrentFunding = marketState.global_funding / DECIMALS;
-    const rawEntryFunding = firstPos.funding_index_at_entry / DECIMALS;
+    const rawEntryFunding = pos.funding_index_at_entry / DECIMALS;
     const fundingDiff = rawCurrentFunding - rawEntryFunding;
-    const positionSize = rawMargin * firstPos.leverage;
+    const positionSize = rawMargin * pos.leverage;
 
-    fundingPnl = firstPos.is_long
+    const posFundingPnl = pos.is_long
       ? -(fundingDiff * positionSize) / 1000
       : (fundingDiff * positionSize) / 1000;
 
-    pnl = pricePnl + fundingPnl;
-    pnlPercent = (pnl / rawMargin) * 100;
+    fundingPnl += posFundingPnl;
+    pnl += pricePnl + posFundingPnl;
+    totalMargin += rawMargin;
   }
+
+  if (totalMargin > 0) {
+    pnlPercent = (pnl / totalMargin) * 100;
+  }
+
+  const firstPos = positions[0] || null;
 
   return (
     <main className="flex h-screen w-full flex-col overflow-hidden">

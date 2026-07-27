@@ -7,9 +7,11 @@ import { signAndSubmit } from '@/lib/sign';
 import { USDC_TOKEN_ID, XLM_TOKEN_ID } from '@/lib/stellar';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 import { useLanguage } from '@/components/LanguageProvider';
+import { useToast } from '@/components/Toast';
 
 export default function Portfolio() {
   const { t, formatNum } = useLanguage();
+  const { toast } = useToast();
   const wallet = useWalletContext();
   const { publicKey } = wallet;
   
@@ -58,10 +60,10 @@ export default function Portfolio() {
       const state = await readPoolState(publicKey);
       setPoolState(state);
       setPendingAction(null);
-      alert('Deposit successful!');
+      toast('Deposit Successful', 'success', `Deposited ${depositAmount} ${selectedAsset} to liquidity pool`);
     } catch (e: unknown) {
       setPendingAction(null);
-      alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Deposit Failed', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -91,10 +93,10 @@ export default function Portfolio() {
       const state = await readPoolState(publicKey);
       setPoolState(state);
       setPendingAction(null);
-      alert('Withdrawal successful!');
+      toast('Withdrawal Successful', 'success', `Withdrew ${withdrawAmount} ${selectedAsset} value from pool`);
     } catch (e: unknown) {
       setPendingAction(null);
-      alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      toast('Withdrawal Failed', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -137,7 +139,7 @@ export default function Portfolio() {
           </div>
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('totalSharesMinted')}</div>
-            <div className="text-2xl font-mono font-bold text-white">{(poolState.totalShares / DECIMALS).toLocaleString()}</div>
+            <div className="text-2xl font-mono font-bold text-white">{formatNum(poolState.totalShares / DECIMALS, 2)}</div>
           </div>
           <div className="bg-panel border border-border rounded-lg p-5 relative overflow-hidden">
             <div className="absolute inset-0 bg-brand/5 blur-xl"></div>
@@ -165,7 +167,7 @@ export default function Portfolio() {
                   
                   <div className="bg-background rounded-lg p-5 border border-border flex flex-col justify-center">
                     <div className="text-sm text-muted mb-2">My Staked USDC</div>
-                    <div className="text-3xl font-mono text-white">${userStakedUsdc.toFixed(2)}</div>
+                    <div className="text-3xl font-mono text-white">${formatNum(userStakedUsdc, 2)}</div>
                     <div className="text-xs text-brand mt-2">+ TBD PnL (Session)</div>
                   </div>
 
