@@ -1,47 +1,25 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
+
+const subscribeOffline = (callback: () => void) => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('offline', callback);
+    window.addEventListener('online', callback);
+    return () => {
+      window.removeEventListener('offline', callback);
+      window.removeEventListener('online', callback);
+    };
+  }
+  return () => {};
+};
+
+const getOfflineSnapshot = () => (typeof navigator !== 'undefined' ? !navigator.onLine : false);
+const getServerOfflineSnapshot = () => false;
 
 export function NetworkBanner() {
-  const [isOffline, setIsOffline] = useState(false);
-  const [isSlow, setIsSlow] = useState(false);
+  const isOffline = useSyncExternalStore(subscribeOffline, getOfflineSnapshot, getServerOfflineSnapshot);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleOffline = () => setIsOffline(true);
-    const handleOnline = () => {
-      setIsOffline(false);
-      setIsSlow(false);
-    };
-
-    if (!navigator.onLine) {
-      setIsOffline(true);
-    }
-
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('online', handleOnline);
-
-    const nav = navigator as unknown as { connection?: { effectiveType?: string; addEventListener?: (type: string, fn: () => void) => void } };
-    if (nav.connection) {
-      const checkConnection = () => {
-        const type = nav.connection?.effectiveType;
-        if (type === 'slow-2g' || type === '2g') {
-          setIsSlow(true);
-        } else {
-          setIsSlow(false);
-        }
-      };
-      checkConnection();
-      nav.connection.addEventListener?.('change', checkConnection);
-    }
-
-    return () => {
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, []);
-
-  if (!isOffline && !isSlow) return null;
+  if (!isOffline) return null;
 
   return (
     <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-300 px-4 py-2 text-xs flex items-center justify-between font-medium backdrop-blur-md z-50">
@@ -51,9 +29,7 @@ export function NetworkBanner() {
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
         </span>
         <span>
-          {isOffline
-            ? 'Internet Disconnected — Retrying connection to Binance & Stellar Testnet...'
-            : 'Slow Network Connection Detected — Price updates may be slightly delayed.'}
+          Internet Disconnected — Retrying connection to Binance & Stellar Testnet...
         </span>
       </div>
     </div>
