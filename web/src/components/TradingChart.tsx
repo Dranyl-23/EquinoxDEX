@@ -411,7 +411,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
       </div>
 
       {/* Left Pro Chart Drawing Toolbar */}
-      <div className="absolute left-2 top-12 z-20 hidden md:flex flex-col gap-1 bg-panel/90 backdrop-blur-xl border border-border/70 rounded-xl p-1 shadow-2xl">
+      <div className="absolute left-2 top-12 z-20 flex flex-col gap-1 bg-panel/90 backdrop-blur-xl border border-border/70 rounded-xl p-1 shadow-2xl max-h-[220px] md:max-h-none overflow-y-auto custom-scrollbar">
         <button
           onClick={() => setActiveTool('pointer')}
           className="p-2 rounded-lg transition-colors cursor-pointer relative group text-muted hover:text-white hover:bg-background"
@@ -526,7 +526,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
 
       {/* Chart Canvas & Interactive Drawing Overlay Container */}
       <div 
-        className="relative w-full flex-1 min-h-0 md:ml-12"
+        className="relative w-full flex-1 min-h-0 ml-12"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
