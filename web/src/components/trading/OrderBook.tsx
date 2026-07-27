@@ -45,7 +45,7 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
 
       try {
         const lowerSym = symbol.toLowerCase();
-        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSym}@depth10@100ms`);
+        ws = new WebSocket(`wss://stream.binance.com/ws/${lowerSym}@depth10@100ms`);
 
         ws.onmessage = (event) => {
           if (isDestroyed) return;
@@ -126,7 +126,7 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
 
       try {
         const lowerSym = symbol.toLowerCase();
-        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSym}@trade`);
+        ws = new WebSocket(`wss://stream.binance.com/ws/${lowerSym}@trade`);
 
         ws.onmessage = (event) => {
           if (isDestroyed) return;

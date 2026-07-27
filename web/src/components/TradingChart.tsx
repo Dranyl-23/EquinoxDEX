@@ -174,7 +174,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
 
         // Setup WebSocket for Live Kline Updates
         const wsSymbol = symbol.toLowerCase();
-        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${wsSymbol}@kline_${selectedInterval}`);
+        ws = new WebSocket(`wss://stream.binance.com/ws/${wsSymbol}@kline_${selectedInterval}`);
 
         ws.onopen = () => setWsConnected(true);
         ws.onmessage = (event) => {

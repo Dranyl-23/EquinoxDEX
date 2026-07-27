@@ -65,7 +65,7 @@ export function useLivePrice(symbol: string = 'BTCUSDT') {
 
       try {
         const lowerSymbol = symbol.toLowerCase();
-        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerSymbol}@aggTrade`);
+        ws = new WebSocket(`wss://stream.binance.com/ws/${lowerSymbol}@aggTrade`);
 
         ws.onopen = () => {
           attemptCount = 0;
