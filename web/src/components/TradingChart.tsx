@@ -608,7 +608,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
           </button>
 
           {showDatePicker && (
-            <div className="absolute bottom-full left-0 mb-2 p-4 bg-panel/95 border border-border/80 rounded-2xl shadow-2xl backdrop-blur-2xl z-50 flex flex-col gap-3.5 w-64 text-xs font-sans">
+            <div className="absolute bottom-full right-0 mb-2 p-4 bg-panel/95 border border-border/80 rounded-2xl shadow-2xl backdrop-blur-2xl z-50 flex flex-col gap-3.5 w-64 text-xs font-sans">
               
               {/* Header */}
               <div className="flex justify-between items-center border-b border-border/60 pb-2">
