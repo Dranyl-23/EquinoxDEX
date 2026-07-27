@@ -1,7 +1,7 @@
 'use client';
 import { useState, useCallback, useSyncExternalStore } from 'react';
 
-const TIMEOUT_MS = 3000;
+const TIMEOUT_MS = 15000; // 15 seconds to allow user to unlock Freighter popup
 
 function withTimeout<T>(p: Promise<T>, fallback: T, ms = TIMEOUT_MS): Promise<T> {
   return Promise.race([
@@ -57,18 +57,31 @@ export function useWallet(): WalletState {
         return;
       }
 
-      const res = await withTimeout(
-        freighter.getAddress(),
-        { address: '', error: '' }
-      );
+      // Try requestAccess first to trigger popup if locked/unapproved
+      let address = '';
+      try {
+        const accessRes = await withTimeout(
+          freighter.requestAccess(),
+          { address: '', error: '' }
+        );
+        address = typeof accessRes === 'string' ? accessRes : accessRes?.address ?? '';
+      } catch {
+        // Fallback to getAddress if requestAccess is unavailable
+      }
 
-      const address = typeof res === 'string' ? res : res?.address;
+      if (!address) {
+        const getRes = await withTimeout(
+          freighter.getAddress(),
+          { address: '', error: '' }
+        );
+        address = typeof getRes === 'string' ? getRes : getRes?.address ?? '';
+      }
 
       if (address) {
         localStorage.setItem('freighterPublicKey', address);
         window.dispatchEvent(new Event('storage'));
       } else {
-        setError('Failed to fetch public key from Freighter.');
+        setError('Freighter is locked or connection rejected. Please unlock Freighter and click Connect.');
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
