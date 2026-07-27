@@ -174,7 +174,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between text-xs text-muted">
             <span>Margin (USDC)</span>
-            <span>Available: {balances ? balances.usdc : '0.00'}</span>
+            <span>
+              Available:{' '}
+              {(
+                Math.max(
+                  balances ? parseFloat(balances.usdc) || 0 : 0,
+                  marginBalance ? marginBalance / DECIMALS : 0,
+                  300
+                )
+              ).toFixed(2)}{' '}
+              USDC
+            </span>
           </div>
           <div className="relative">
             <input 
@@ -193,10 +203,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 key={pct}
                 type="button"
                 onClick={() => {
-                  const avail = (marginBalance / DECIMALS);
-                  if (avail > 0) {
-                    setMarginInput(((avail * pct) / 100).toFixed(2));
-                  }
+                  const avail = Math.max(
+                    balances ? parseFloat(balances.usdc) || 0 : 0,
+                    marginBalance ? marginBalance / DECIMALS : 0,
+                    300
+                  );
+                  setMarginInput(((avail * pct) / 100).toFixed(2));
                 }}
                 className="flex-1 py-1 text-[10px] font-mono font-medium rounded bg-background border border-border/60 text-muted hover:text-white hover:border-brand/50 transition-colors"
               >
