@@ -181,7 +181,7 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
     : '0.00';
 
   return (
-    <div className="w-64 bg-panel/70 backdrop-blur-md border-r border-border/50 flex flex-col z-20 text-xs font-mono select-none">
+    <div className="w-full lg:w-64 h-[350px] lg:h-full shrink-0 bg-panel/70 backdrop-blur-md border-r border-t lg:border-t-0 border-border/50 flex flex-col z-20 text-xs font-mono select-none">
       {/* Header Tabs */}
       <div className="flex border-b border-border/50 p-2 gap-2 text-xs font-sans">
         <button

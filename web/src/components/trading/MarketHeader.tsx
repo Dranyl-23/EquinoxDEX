@@ -115,17 +115,17 @@ export function MarketHeader({
 
   return (
     <div className="flex flex-col md:flex-row md:items-center items-start justify-between border-b border-border/50 px-4 md:px-6 py-4 bg-panel/30 backdrop-blur-md z-30 relative gap-4">
-      <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full md:w-auto justify-between md:justify-start">
         {/* Interactive Market Selector Dropdown */}
         <button
           onClick={onOpenMarketModal || (() => setIsOpen(!isOpen))}
-          className="flex items-center gap-3 text-xl font-bold text-white hover:text-brand transition-colors focus:outline-none bg-panel/40 hover:bg-panel border border-border/60 hover:border-brand px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-all"
+          className="flex items-center gap-2 sm:gap-3 text-lg md:text-xl font-bold text-white hover:text-brand transition-colors focus:outline-none bg-panel/40 hover:bg-panel border border-border/60 hover:border-brand px-2 sm:px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-all"
           title="Click or press Ctrl+K to select from 200+ Markets"
         >
           <TokenLogo id={currentObj.id} />
           <span>{selectedMarket || currentObj.name}</span>
           <span className="text-xs text-muted">▼</span>
-          <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
+          <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded hidden sm:flex items-center gap-1">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             200+ Markets
           </span>
@@ -136,7 +136,7 @@ export function MarketHeader({
             Price Feed Unavailable
           </span>
         ) : (
-          <span className={`text-xl font-mono ${currentPrice > 0 ? 'text-green-500 font-bold' : 'text-muted animate-pulse'}`}>
+          <span className={`text-lg md:text-xl font-mono ${currentPrice > 0 ? 'text-green-500 font-bold' : 'text-muted animate-pulse'}`}>
             {currentPrice > 0 ? `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : loading ? 'Loading...' : '...'}
           </span>
         )}

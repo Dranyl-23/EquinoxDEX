@@ -107,11 +107,11 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="w-full border border-border/60 rounded-lg bg-background overflow-hidden min-h-full flex flex-col shadow-inner">
+      <div className="flex-1 overflow-hidden p-2 sm:p-4">
+        <div className="w-full border border-border/60 rounded-lg bg-background overflow-auto h-full flex flex-col shadow-inner">
           {activeTab === 'positions' && (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider">
+            <table className="w-full text-left text-sm min-w-[800px]">
+              <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">{t('market') || 'Market'}</th>
                   <th className="px-4 py-2.5 font-semibold">{t('size') || 'Size'}</th>
@@ -248,8 +248,8 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
           )}
 
           {activeTab === 'orders' && (
-            <table className="w-full text-left text-sm">
-              <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider">
+            <table className="w-full text-left text-sm min-w-[600px]">
+              <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Type</th>
                   <th className="px-4 py-2.5 font-semibold">{t('size') || 'Size'}</th>

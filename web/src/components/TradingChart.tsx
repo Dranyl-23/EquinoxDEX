@@ -388,7 +388,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
     <div className="relative w-full h-full flex pt-12 pb-8 [&_#tv-attr-logo]:hidden [&_a]:hidden overflow-hidden">
       
       {/* Timeframe Selector Toolbar */}
-      <div className="absolute top-2.5 left-14 z-20 flex items-center gap-1 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg p-1 shadow-lg">
+      <div className="absolute top-2.5 left-2 md:left-14 z-20 flex items-center gap-1 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg p-1 shadow-lg">
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
@@ -411,7 +411,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
       </div>
 
       {/* Left Pro Chart Drawing Toolbar */}
-      <div className="absolute left-2 top-12 z-20 flex flex-col gap-1 bg-panel/90 backdrop-blur-xl border border-border/70 rounded-xl p-1 shadow-2xl">
+      <div className="absolute left-2 top-12 z-20 hidden md:flex flex-col gap-1 bg-panel/90 backdrop-blur-xl border border-border/70 rounded-xl p-1 shadow-2xl">
         <button
           onClick={() => setActiveTool('pointer')}
           className="p-2 rounded-lg transition-colors cursor-pointer relative group text-muted hover:text-white hover:bg-background"
@@ -526,7 +526,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
 
       {/* Chart Canvas & Interactive Drawing Overlay Container */}
       <div 
-        className="relative w-full flex-1 min-h-0 ml-12"
+        className="relative w-full flex-1 min-h-0 md:ml-12"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -541,7 +541,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
       </div>
 
       {/* Bottom Historical Date Range & Go To Date Toolbar */}
-      <div className="absolute bottom-1 left-14 z-20 flex items-center gap-3 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg px-3 py-1 shadow-lg text-xs font-mono">
+      <div className="absolute bottom-1 left-2 md:left-14 z-20 flex items-center gap-3 bg-panel/95 backdrop-blur-md border border-border/60 rounded-lg px-3 py-1 shadow-lg text-xs font-mono">
         <div className="flex items-center gap-1.5 text-muted">
           {DATE_RANGES.map((rng) => (
             <button

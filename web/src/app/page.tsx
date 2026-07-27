@@ -421,9 +421,9 @@ export default function Home() {
               <SkewBar totalLongOi={marketState.long_oi} totalShortOi={marketState.short_oi} />
             </div>
 
-            <div className="flex-1 flex overflow-hidden w-full h-full">
+            <div className="flex-1 flex flex-col-reverse lg:flex-row overflow-y-auto lg:overflow-hidden w-full h-full">
               <OrderBook currentPrice={currentPrice} symbol={selectedMarket} />
-              <div className="flex-1 flex items-center justify-center text-muted h-full w-full relative overflow-hidden">
+              <div className="flex-1 flex min-h-[350px] lg:min-h-0 h-full w-full relative overflow-hidden shrink-0 lg:shrink">
                 <TradingChart symbol={selectedMarket} />
               </div>
             </div>

@@ -134,7 +134,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   );
 
   return (
-    <div className="w-85 bg-panel/80 backdrop-blur-xl flex flex-col overflow-y-auto border-l border-border/50 z-20 shadow-2xl relative">
+    <div className="w-full lg:w-[340px] bg-panel/80 backdrop-blur-xl flex flex-col overflow-y-auto border-l border-border/50 z-20 shadow-2xl relative shrink-0">
       <div className="absolute inset-0 bg-linear-to-b from-brand/5 to-transparent pointer-events-none"></div>
       
       {/* Header Bar */}
