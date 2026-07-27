@@ -77,7 +77,7 @@ fn test_dynamic_skew_funding() {
     client.add_liquidity(&lp, &token.address, &10000_0000000);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    client.deposit_margin(&user1, &100_0000000);
+    client.deposit_margin(&user1, &102_0000000); // Extra 2 USDC to cover 0.1% open_fee (C4 FIX)
     client.open_position(&user1, &user1, &100_0000000, &10, &true, &0, &0, &0);
     
     let state1 = client.get_market_state();
@@ -88,7 +88,7 @@ fn test_dynamic_skew_funding() {
 
     advance_time(&env, 100);
 
-    client.deposit_margin(&user2, &100_0000000);
+    client.deposit_margin(&user2, &102_0000000);
     client.open_position(&user2, &user2, &100_0000000, &10, &false, &0, &0, &0);
 
     let state2 = client.get_market_state();
@@ -127,7 +127,7 @@ fn test_take_profit_trigger() {
     client.add_liquidity(&lp, &token.address, &10000_0000000);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    client.deposit_margin(&user, &100_0000000);
+    client.deposit_margin(&user, &102_0000000);
     client.open_position(&user, &user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
 
     set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
@@ -160,7 +160,7 @@ fn test_order_not_triggered() {
     client.add_liquidity(&lp, &token.address, &10000_0000000);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    client.deposit_margin(&user, &100_0000000);
+    client.deposit_margin(&user, &102_0000000);
     client.open_position(&user, &user, &100_0000000, &10, &true, &66000_0000000, &54000_0000000, &0);
 
     set_dummy_price(&env, &oracle_id, "BTC", 65000_0000000);
@@ -195,19 +195,19 @@ fn test_leaderboard() {
     
     // User 1 makes profit
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
-    client.deposit_margin(&user1, &100_0000000);
+    client.deposit_margin(&user1, &102_0000000); // Extra 2 USDC to cover 0.1% open_fee (C4 FIX)
     client.open_position(&user1, &user1, &100_0000000, &10, &true, &0, &0, &0);
     set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
     client.close_position(&user1, &user1, &0);
     
     // User 2 takes a loss
-    client.deposit_margin(&user2, &100_0000000);
+    client.deposit_margin(&user2, &102_0000000);
     client.open_position(&user2, &user2, &100_0000000, &10, &true, &0, &0, &0);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
     client.close_position(&user2, &user2, &0);
     
     // User 3 makes more profit
-    client.deposit_margin(&user3, &100_0000000);
+    client.deposit_margin(&user3, &102_0000000);
     client.open_position(&user3, &user3, &100_0000000, &20, &true, &0, &0, &0);
     set_dummy_price(&env, &oracle_id, "BTC", 66000_0000000);
     client.close_position(&user3, &user3, &0);
@@ -252,7 +252,7 @@ fn test_session_keys() {
     // Register session key
     client.add_session_key(&user, &session);
 
-    client.deposit_margin(&user, &100_0000000);
+    client.deposit_margin(&user, &102_0000000);
     // Open position using session key as caller!
     client.open_position(&session, &user, &100_0000000, &10, &true, &0, &0, &0);
     
@@ -290,7 +290,7 @@ fn test_session_keys_hacker() {
     client.add_liquidity(&lp, &token.address, &10000_0000000);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    client.deposit_margin(&user, &100_0000000);
+    client.deposit_margin(&user, &102_0000000);
     // Try opening position using hacker as caller
     client.open_position(&evil_hacker, &user, &100_0000000, &10, &true, &0, &0, &0);
 }
@@ -317,7 +317,7 @@ fn test_limit_orders() {
     client.add_liquidity(&lp, &token.address, &10000_0000000);
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
-    client.deposit_margin(&user, &100_0000000);
+    client.deposit_margin(&user, &102_0000000);
     client.place_limit_order(&user, &user, &100_0000000, &10, &true, &55000_0000000, &65000_0000000, &50000_0000000, &0);
 
     let orders = client.get_limit_orders(&user);

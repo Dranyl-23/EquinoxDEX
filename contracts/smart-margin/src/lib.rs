@@ -453,7 +453,8 @@ impl SmartMarginContract {
         let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
 
         let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
-        if bal < margin {
+        // BUG FIX C4: Check margin + open_fee to prevent under-collateralization
+        if bal < margin + open_fee {
             return Err(Error::InvalidMargin);
         }
         
@@ -561,10 +562,10 @@ impl SmartMarginContract {
                 
                 let total_oi = total_long_oi + total_short_oi + position_size;
                 if total_oi <= total_aum * 5 {
-                    // C3 FIX: Deduct opening fee from user's margin balance
+                    // BUG FIX C4: Check margin + open_fee (not just fee) to prevent under-collateralization
                     let mut user_bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
-                    if user_bal < open_fee {
-                        remaining_orders.push_back(order); // Insufficient balance for fee
+                    if user_bal < order.margin + open_fee {
+                        remaining_orders.push_back(order); // Insufficient balance for margin + fee
                         continue;
                     }
                     user_bal -= open_fee;
@@ -680,22 +681,37 @@ impl SmartMarginContract {
 
         let close_fee = position_size / 1000; // 0.1% closing fee (in USDC value)
 
-        let final_pnl = pnl + funding_pnl - close_fee;
+        // BUG FIX C3: Separate trader_pnl (without fee) from pool accounting
+        // trader receives: pnl + funding_pnl - close_fee
+        // pool pays: pnl + funding_pnl (the raw P&L), and receives close_fee separately
+        let trader_pnl = pnl + funding_pnl - close_fee;
+
+        // BUG FIX C2: Pool accounting — pool pays raw PnL, receives close_fee once (not twice)
+        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
+        // Pool absorbs the raw PnL (negative = pool gains, positive = pool pays)
+        let raw_pnl = pnl + funding_pnl;
+        pool_bal -= raw_pnl;
+        // Pool receives the close fee once (not double-counted)
+        pool_bal += close_fee;
+
+        // BUG FIX C2 (insolvency): If pool cannot cover payout, cap trader profit
+        // to available pool balance to prevent phantom USDC credits
+        let mut actual_trader_pnl = trader_pnl;
+        if pool_bal < 0 {
+            // Pool is insolvent — reduce trader profit by the deficit
+            actual_trader_pnl += pool_bal; // pool_bal is negative, so this reduces profit
+            pool_bal = 0;
+        }
 
         let mut bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
-        bal += final_pnl;
+        bal += actual_trader_pnl;
         if bal < 0 {
             bal = 0; // Liquidated or negative balance absorbed by pool
         }
         env.storage().persistent().set(&DataKey::MarginBalance(user.clone()), &bal);
         env.storage().persistent().extend_ttl(&DataKey::MarginBalance(user.clone()), 10_000, 100_000);
-        
-        // C2 FIX: Properly adjust pool balance — pool pays winning traders, absorbs losses
-        let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
-        let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
-        pool_bal -= final_pnl;
-        pool_bal += close_fee;
-        if pool_bal < 0 { pool_bal = 0; }
+
         env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
         
         if actual_margin_to_close == position.margin {
@@ -719,16 +735,16 @@ impl SmartMarginContract {
         }
 
         let mut total_pnl: i128 = env.storage().persistent().get(&DataKey::UserTotalPnL(user.clone())).unwrap_or(0);
-        total_pnl += final_pnl;
+        total_pnl += actual_trader_pnl;
         env.storage().persistent().set(&DataKey::UserTotalPnL(user.clone()), &total_pnl);
         env.storage().persistent().extend_ttl(&DataKey::UserTotalPnL(user.clone()), 10_000, 100_000);
         
         // M15 FIX: Conditional leaderboard update
-        if final_pnl != 0 {
+        if actual_trader_pnl != 0 {
             Self::update_leaderboard(env, user.clone(), total_pnl);
         }
 
-        Ok(final_pnl)
+        Ok(actual_trader_pnl)
     }
 
     pub fn close_position(env: Env, caller: Address, user: Address, margin_to_close: i128) -> Result<i128, Error> {
