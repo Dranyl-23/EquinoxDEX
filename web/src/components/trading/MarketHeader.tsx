@@ -116,6 +116,12 @@ export function MarketHeader({
   return (
     <div className="flex flex-col md:flex-row md:items-center items-start justify-between border-b border-border/50 px-4 md:px-6 py-4 bg-panel/30 backdrop-blur-md z-30 relative gap-4">
       <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full md:w-auto justify-between md:justify-start">
+        {/* App Logo */}
+        <div className="flex items-center gap-2 mr-1 sm:mr-3">
+          <TokenLogo id="EQX-PERP" />
+          <span className="font-bold text-white text-xl tracking-tight hidden lg:block">Equinox</span>
+        </div>
+
         {/* Interactive Market Selector Dropdown */}
         <button
           onClick={onOpenMarketModal || (() => setIsOpen(!isOpen))}
