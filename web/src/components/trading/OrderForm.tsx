@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Balances } from '@/lib/balances';
 import { Position } from '@/lib/contract';
 import { DECIMALS } from '@/lib/constants';
+import { playOrderPlacedSound, playTradeExecutedSound } from '@/lib/sound';
 
 interface OrderFormProps {
   publicKey: string | null;
@@ -82,6 +83,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
   const handleSubmitOrder = async () => {
     if (!isOrderValid) return;
+    playOrderPlacedSound();
     await onOpenPosition({
       orderTab,
       positionType,
@@ -92,6 +94,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       slInput,
       trailingInput,
     });
+    playTradeExecutedSound();
     setMarginInput('');
     setTriggerInput('');
     setTpInput('');

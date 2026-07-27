@@ -39,6 +39,18 @@ export default function Navbar() {
             Vaults
           </Link>
           <Link 
+            href="/history" 
+            className={`hover:text-white transition-colors ${pathname === '/history' ? 'text-white font-bold' : ''}`}
+          >
+            History
+          </Link>
+          <Link 
+            href="/rewards" 
+            className={`hover:text-brand transition-colors flex items-center gap-1.5 ${pathname === '/rewards' ? 'text-brand font-bold' : ''}`}
+          >
+            <span className="text-amber-400 font-bold text-xs">🎁</span> Rewards
+          </Link>
+          <Link 
             href="/leaderboard" 
             className={`hover:text-brand transition-colors flex items-center gap-1.5 ${pathname === '/leaderboard' ? 'text-brand font-bold' : ''}`}
           >

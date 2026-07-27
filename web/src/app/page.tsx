@@ -22,6 +22,7 @@ import {
 import { signAndSubmit } from '@/lib/sign';
 import { getSessionKey, generateSessionKey, clearSessionKey, use1ClickEnabled } from '@/lib/sessionKey';
 import { TradingChart } from '@/components/TradingChart';
+import { SharePnLModal } from '@/components/SharePnLModal';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 import { useLivePrice } from '@/hooks/useLivePrice';
 import PnLShareCard from '@/components/PnLShareCard';
@@ -327,16 +328,15 @@ export default function Home() {
         />
       </div>
 
-      {showShareCard && position && (
-        <PnLShareCard
-          asset="BTC"
-          isLong={position.is_long}
-          leverage={position.leverage}
-          entryPrice={Number(position.entry_price)}
-          pnlUsd={pnl}
-          onClose={() => setShowShareCard(false)}
-        />
-      )}
+      <SharePnLModal
+        isOpen={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        publicKey={publicKey}
+        position={position}
+        pnl={pnl}
+        pnlPercent={pnlPercent}
+        currentPrice={currentPrice}
+      />
     </main>
   );
 }
