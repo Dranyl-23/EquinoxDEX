@@ -84,10 +84,22 @@ export default function Leaderboard() {
                     >
                       <td className="py-5 px-6">
                         <div className="flex items-center gap-3">
-                          {idx === 0 && <span className="text-2xl">🥇</span>}
-                          {idx === 1 && <span className="text-2xl">🥈</span>}
-                          {idx === 2 && <span className="text-2xl">🥉</span>}
-                          {idx > 2 && <span className="font-mono text-muted text-lg w-8 text-center">#{idx + 1}</span>}
+                          {idx === 0 && (
+                            <span className="px-2.5 py-1 text-xs font-mono font-extrabold rounded-md bg-linear-to-r from-yellow-400 to-amber-500 text-black shadow-md shadow-yellow-500/20">
+                              #1
+                            </span>
+                          )}
+                          {idx === 1 && (
+                            <span className="px-2.5 py-1 text-xs font-mono font-extrabold rounded-md bg-linear-to-r from-slate-200 to-slate-400 text-black shadow-md shadow-slate-400/20">
+                              #2
+                            </span>
+                          )}
+                          {idx === 2 && (
+                            <span className="px-2.5 py-1 text-xs font-mono font-extrabold rounded-md bg-linear-to-r from-amber-600 to-amber-700 text-white shadow-md shadow-amber-600/20">
+                              #3
+                            </span>
+                          )}
+                          {idx > 2 && <span className="font-mono text-muted text-sm w-8 text-center">#{idx + 1}</span>}
                         </div>
                       </td>
                       <td className="py-5 px-6">
