@@ -301,10 +301,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           {/* 1-Click Trading Toggle */}
           <div className="flex items-center justify-between bg-panel/50 p-2 rounded border border-border/50">
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-amber-400 fill-amber-400" viewBox="0 0 24 24">
-                  <path d="M13 2L3 14h7v8l10-12h-7z" />
-                </svg>
+              <span className="text-xs font-bold text-white">
                 1-Click Trading
               </span>
               <span className="text-[10px] text-muted">Trade instantly, no wallet popups.</span>
