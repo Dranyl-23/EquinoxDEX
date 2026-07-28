@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useWalletContext } from '@/components/WalletProvider';
 import {
-  readMarginBalance,
   readReferralStats,
+  readMarketState,
   buildClaimReferralKickbackXDR,
   contractConfigured,
 } from '@/lib/contract';
@@ -20,17 +20,12 @@ export default function RewardsPage() {
 
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const [customAlias, setCustomAlias] = useState('');
-  const [activeCode, setActiveCode] = useState('');
+  const [customAlias, setCustomAlias] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('equinox_custom_alias') ?? '';
+  });
 
-  // Load saved alias on mount
-  useEffect(() => {
-    const savedAlias = typeof window !== 'undefined' ? localStorage.getItem('equinox_custom_alias') : null;
-    if (savedAlias) {
-      setCustomAlias(savedAlias);
-      setActiveCode(savedAlias);
-    }
-  }, []);
+  const activeCode = customAlias.trim() ? customAlias.trim().toUpperCase() : publicKey || '';
 
   // On-chain Referral State
   const [unclaimedKickback, setUnclaimedKickback] = useState<number>(0);
@@ -41,17 +36,16 @@ export default function RewardsPage() {
   useEffect(() => {
     if (!publicKey || !contractConfigured()) return;
 
-    const code = customAlias.trim()
-      ? customAlias.trim().toUpperCase()
-      : publicKey;
-    setActiveCode(code);
-
     const loadStats = async () => {
       try {
-        const stats = await readReferralStats(publicKey);
+        const [stats, market] = await Promise.all([
+          readReferralStats(publicKey),
+          readMarketState()
+        ]);
         setUnclaimedKickback(stats.kickback);
         setLifetimeEarnings(stats.lifetime);
         setReferredCount(stats.count);
+        setTradingVolume30d(market.total_volume / 10000000);
       } catch {
         // Silently swallow polling glitches
       }
@@ -109,10 +103,10 @@ export default function RewardsPage() {
   const handleCreateCustomAlias = () => {
     if (!customAlias.trim()) return;
     const cleanCode = customAlias.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    setActiveCode(cleanCode);
     if (typeof window !== 'undefined') {
       localStorage.setItem('equinox_custom_alias', cleanCode);
     }
+    setCustomAlias(cleanCode);
     toast('Custom Referral Code Created', 'success', `Your referral alias is set to ${cleanCode}`);
   };
 

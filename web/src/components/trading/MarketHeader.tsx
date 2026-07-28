@@ -1,6 +1,7 @@
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import { DECIMALS } from '@/lib/constants';
+import { MARKETS } from '@/lib/markets';
 import { useLanguage } from '../LanguageProvider';
 
 export interface MarketHeaderProps {
@@ -9,7 +10,6 @@ export interface MarketHeaderProps {
   loading?: boolean;
   error?: string | null;
   selectedMarket?: string;
-  onSelectMarket?: (market: string) => void;
   onOpenMarketModal?: () => void;
   onOpenShortcutsModal?: () => void;
 }
@@ -79,12 +79,6 @@ const TokenLogo = ({ id }: { id: string }) => {
   );
 };
 
-const MARKETS = [
-  { id: 'EQX-PERP', name: 'EQX-PERP', badge: 'Flagship Token' },
-  { id: 'XLM-PERP', name: 'XLM-PERP', badge: 'Stellar Native' },
-  { id: 'BTC-PERP', name: 'BTC-PERP', badge: 'Cross-Margin' },
-  { id: 'ETH-PERP', name: 'ETH-PERP', badge: 'Cross-Margin' },
-];
 
 export function MarketHeader({
   currentPrice,
@@ -92,25 +86,23 @@ export function MarketHeader({
   loading,
   error,
   selectedMarket = 'EQX-PERP',
-  onSelectMarket,
   onOpenMarketModal,
   onOpenShortcutsModal,
 }: MarketHeaderProps) {
   const { t, formatNum } = useLanguage();
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeMarket, setActiveMarket] = useState(selectedMarket);
-
+ 
   const skew = marketState.long_oi - marketState.short_oi;
   const skewDisplay = (skew / DECIMALS).toLocaleString();
   const isSkewLong = skew > 0;
   const isSkewShort = skew < 0;
 
-  const currentObj = MARKETS.find((m) => m.id === (selectedMarket || activeMarket)) || MARKETS[0];
-
-  const handleSelect = (id: string) => {
-    setActiveMarket(id);
-    setIsOpen(false);
-    if (onSelectMarket) onSelectMarket(id);
+  const currentObj = MARKETS.find((m) => m.symbol === selectedMarket) || {
+    symbol: selectedMarket,
+    baseAsset: selectedMarket,
+    quoteAsset: '',
+    name: selectedMarket,
+    category: 'Top' as const,
+    maxLeverage: 1,
   };
 
   return (
@@ -124,11 +116,11 @@ export function MarketHeader({
 
         {/* Interactive Market Selector Dropdown */}
         <button
-          onClick={onOpenMarketModal || (() => setIsOpen(!isOpen))}
+          onClick={onOpenMarketModal}
           className="flex items-center gap-2 sm:gap-3 text-lg md:text-xl font-bold text-white hover:text-brand transition-colors focus:outline-none bg-panel/40 hover:bg-panel border border-border/60 hover:border-brand px-2 sm:px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-all"
           title="Click or press Ctrl+K to select from 200+ Markets"
         >
-          <TokenLogo id={currentObj.id} />
+          <TokenLogo id={currentObj.symbol} />
           <span>{selectedMarket || currentObj.name}</span>
           <span className="text-xs text-muted">▼</span>
           <span className="text-[10px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded hidden sm:flex items-center gap-1">

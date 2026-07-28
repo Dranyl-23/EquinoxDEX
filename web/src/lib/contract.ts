@@ -285,6 +285,7 @@ export async function buildTriggerOrdersXDR(caller: string, targetUser: string):
 export async function buildPlaceLimitOrderXDR(
   caller: string,
   user: string,
+  symbol: string,
   margin: number, // Scaled by 10^7
   leverage: number,
   isLong: boolean,
@@ -305,6 +306,7 @@ export async function buildPlaceLimitOrderXDR(
         'place_limit_order',
         new Address(caller).toScVal(),
         new Address(user).toScVal(),
+        nativeToScVal(symbol, { type: 'symbol' }),
         nativeToScVal(BigInt(Math.trunc(margin)), { type: 'i128' }),
         nativeToScVal(leverage, { type: 'u32' }),
         nativeToScVal(isLong, { type: 'bool' }),
@@ -737,8 +739,16 @@ export interface TradeRecord {
  */
 export async function readTradeHistory(userAddress: string): Promise<TradeRecord[]> {
   try {
+    let startLedger = 1;
+    try {
+      const latest = await server.getLatestLedger();
+      startLedger = Math.max(1, latest.sequence - 50000);
+    } catch {
+      startLedger = 1;
+    }
+
     const response = await server.getEvents({
-      startLedger: 1,
+      startLedger,
       filters: [
         {
           type: 'contract',

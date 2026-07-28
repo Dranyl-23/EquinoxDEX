@@ -1,20 +1,21 @@
 'use client';
 import React, { useState } from 'react';
 import { Position } from '@/lib/contract';
+import { Balances } from '@/lib/balances';
 import { DECIMALS } from '@/lib/constants';
 import { playOrderPlacedSound, playTradeExecutedSound } from '@/lib/sound';
 import { useLanguage } from '../LanguageProvider';
 
 export interface OrderFormProps {
   publicKey: string | null;
-  balances: { usdc: string; xlm: string } | any;
+  balances: Balances | null;
   marginBalance: number;
   currentPrice: number;
   position: Position | null;
   pnl: number;
   isSubmitting: boolean;
   onOpenPosition: (params: {
-    orderTab: 'Market' | 'Limit' | 'Stop Market' | 'Stop Limit';
+    orderTab: 'Market' | 'Limit';
     positionType: 'Long' | 'Short';
     marginInput: string;
     leverage: number;
@@ -32,12 +33,9 @@ export interface OrderFormProps {
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
-  publicKey,
   balances,
   marginBalance,
   currentPrice,
-  position,
-  pnl,
   isSubmitting,
   onOpenPosition,
   onDeposit,
@@ -47,9 +45,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   accountMode = 'cross',
   onOpenAccountModeModal,
 }) => {
-  const { t, formatNum } = useLanguage();
+  const { t } = useLanguage();
   const [leverage, setLeverage] = useState(10);
-  const [orderTab, setOrderTab] = useState<'Market' | 'Limit' | 'Stop Market' | 'Stop Limit'>('Market');
+  const [orderTab, setOrderTab] = useState<'Market' | 'Limit'>('Market');
   const [positionType, setPositionType] = useState<'Long' | 'Short'>('Long');
   const [marginInput, setMarginInput] = useState('');
   const [triggerInput, setTriggerInput] = useState('');
@@ -130,11 +128,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const availableUsdc = Math.max(
     balances ? parseFloat(balances.usdc) || 0 : 0,
     marginBalance ? marginBalance / DECIMALS : 0,
-    300
   );
 
   return (
-    <div className="w-full lg:w-[340px] bg-panel/80 backdrop-blur-xl flex flex-col overflow-y-auto border-l border-border/50 z-20 shadow-2xl relative shrink-0">
+    <div className="w-full lg:w-85 bg-panel/80 backdrop-blur-xl flex flex-col overflow-y-auto border-l border-border/50 z-20 shadow-2xl relative shrink-0">
       <div className="absolute inset-0 bg-linear-to-b from-brand/5 to-transparent pointer-events-none"></div>
       
       {/* Header Bar */}
@@ -155,9 +152,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       </div>
       
       <div className="p-4 flex flex-col gap-4">
-        {/* Order Tab Toggle (Market / Limit / Stop Market / Stop Limit) */}
+        {/* Order Tab Toggle (Market / Limit) */}
         <div className="flex gap-2 text-xs font-semibold border-b border-border/60 pb-2 overflow-x-auto">
-          {(['Market', 'Limit', 'Stop Market', 'Stop Limit'] as const).map((tab) => (
+          {(['Market', 'Limit'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setOrderTab(tab)}
@@ -165,7 +162,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                 orderTab === tab ? 'bg-brand text-white font-bold' : 'text-muted hover:text-white bg-background/50'
               }`}
             >
-              {tab === 'Market' ? (t('market') || 'Market') : tab === 'Limit' ? (t('limit') || 'Limit') : tab === 'Stop Market' ? (t('stopMarket') || 'Stop Market') : (t('stopLimit') || 'Stop Limit')}
+              {tab === 'Market' ? (t('market') || 'Market') : (t('limit') || 'Limit')}
             </button>
           ))}
         </div>
@@ -249,7 +246,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           <input 
             type="range" 
             min="1" 
-            max="100" 
+            max="50" 
             value={leverage} 
             onChange={(e) => setLeverage(parseInt(e.target.value))}
             className="w-full accent-brand cursor-pointer"

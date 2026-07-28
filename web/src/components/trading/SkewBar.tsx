@@ -28,11 +28,11 @@ export const SkewBar: React.FC<SkewBarProps> = ({ totalLongOi, totalShortOi }) =
       {/* Progress Bar Container */}
       <div className="w-full h-2 bg-background rounded-full overflow-hidden flex border border-border/40 shadow-inner">
         <div 
-          className="h-full bg-gradient-to-r from-brand to-emerald-400 transition-all duration-500" 
+          className="h-full bg-linear-to-r from-brand to-emerald-400 transition-all duration-500" 
           style={{ width: `${longPct}%` }}
         />
         <div 
-          className="h-full bg-gradient-to-r from-rose-500 to-danger transition-all duration-500" 
+          className="h-full bg-linear-to-r from-rose-500 to-danger transition-all duration-500" 
           style={{ width: `${shortPct}%` }}
         />
       </div>

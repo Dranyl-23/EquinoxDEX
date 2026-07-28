@@ -6,27 +6,22 @@ import { signAndSubmit } from '@/lib/sign';
 const REF_KEY = 'equinox_ref_code';
 
 export function useReferral(publicKey: string | null) {
-  const [referrerCode, setReferrerCode] = useState<string | null>(null);
-
-  // 1. Capture ?ref= from URL and save to localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  const [referrerCode] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
     const urlParams = new URLSearchParams(window.location.search);
     const refParam = urlParams.get('ref');
     if (refParam) {
       localStorage.setItem(REF_KEY, refParam);
-      setReferrerCode(refParam);
-    } else {
-      const saved = localStorage.getItem(REF_KEY);
-      if (saved) setReferrerCode(saved);
+      return refParam;
     }
-  }, []);
+    return localStorage.getItem(REF_KEY);
+  });
 
   // 2. Auto-register on-chain when user connects wallet
   useEffect(() => {
     if (!publicKey || !referrerCode || !contractConfigured()) return;
-    // Don't register if code is invalid or matches self
-    if (referrerCode === publicKey || referrerCode.length < 56) return;
+    // Only register valid Stellar public keys and skip self-referrals
+    if (referrerCode === publicKey || !referrerCode.startsWith('G') || referrerCode.length !== 56) return;
 
     const registeredKey = `equinox_ref_registered_${publicKey}`;
     if (localStorage.getItem(registeredKey)) return;

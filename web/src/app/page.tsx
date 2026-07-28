@@ -3,26 +3,25 @@ import { useState, useEffect } from 'react';
 import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
 import {
-  readPositions,
-  readMarketState,
-  readLimitOrders,
-  readMarginBalance,
-  Position,
-  Order,
-  buildOpenPositionXDR,
-  buildClosePositionXDR,
-  buildTriggerOrdersXDR,
-  buildPlaceLimitOrderXDR,
-  buildCancelLimitOrderXDR,
-  buildModifyTpSlXDR,
-  contractConfigured,
-  buildDepositMarginXDR,
-  buildWithdrawMarginXDR,
-  buildAddSessionKeyXDR,
-  buildFundSessionKeyXDR,
-  buildUpdateTrailingStopXDR,
+ readPositions,
+ readMarketState,
+ readLimitOrders,
+ readMarginBalance,
+ Position,
+ Order,
+ buildOpenPositionXDR,
+ buildClosePositionXDR,
+ buildPlaceLimitOrderXDR,
+ buildCancelLimitOrderXDR,
+ contractConfigured,
+ buildDepositMarginXDR,
+ buildWithdrawMarginXDR,
+ buildAddSessionKeyXDR,
+ buildFundSessionKeyXDR,
+ buildUpdateTrailingStopXDR,
 } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
+import { playPositionClosedSound } from '@/lib/sound';
 import { getSessionKey, generateSessionKey, clearSessionKey, use1ClickEnabled } from '@/lib/sessionKey';
 import { initTelegramMiniApp } from '@/lib/telegram';
 import { SkewBar } from '@/components/trading/SkewBar';
@@ -41,7 +40,7 @@ import { OrderBook } from '@/components/trading/OrderBook';
 import { MarketSelectorModal } from '@/components/trading/MarketSelectorModal';
 import { ShortcutsModal } from '@/components/trading/ShortcutsModal';
 import { AccountModeModal, AccountMarginMode } from '@/components/trading/AccountModeModal';
-import { MARKETS, MarketInfo } from '@/lib/markets';
+import { MarketInfo } from '@/lib/markets';
 import { useReferral } from '@/hooks/useReferral';
 
 export default function Home() {
@@ -120,7 +119,7 @@ export default function Home() {
   }, [publicKey]);
 
   const handleOpenPosition = async (params: {
-    orderTab: 'Market' | 'Limit' | 'Stop Market' | 'Stop Limit';
+    orderTab: 'Market' | 'Limit';
     positionType: 'Long' | 'Short';
     marginInput: string;
     leverage: number;
@@ -162,7 +161,7 @@ export default function Home() {
         setPendingPosition(null);
       } else {
         // Limit Order
-        const xdr = await buildPlaceLimitOrderXDR(caller, publicKey, marginScaled, params.leverage, isLong, triggerScaled, tpScaled, slScaled, trailingScaled);
+        const xdr = await buildPlaceLimitOrderXDR(caller, publicKey, selectedMarket, marginScaled, params.leverage, isLong, triggerScaled, tpScaled, slScaled, trailingScaled);
         await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
       }
 
@@ -202,40 +201,10 @@ export default function Home() {
       setBalances(bal);
       const mBal = await readMarginBalance(publicKey);
       setMarginBalance(mBal);
+      playPositionClosedSound();
       toast('Position Closed', 'success', `Closed ${pct}% of ${targetPos.symbol}`);
     } catch (e: unknown) {
       toast('Close Position Error', 'error', e instanceof Error ? e.message : String(e));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleTriggerKeeper = async () => {
-    if (!publicKey) return;
-    setIsSubmitting(true);
-    try {
-      // Step 1: Ratchet trailing stops to latest price before checking TP/SL
-      try {
-        const trailXdr = await buildUpdateTrailingStopXDR(publicKey);
-        await signAndSubmit(trailXdr, publicKey);
-      } catch {
-        // No trailing stop positions — safe to ignore
-      }
-
-      // Step 2: Trigger TP/SL / liquidation checks
-      const xdr = await buildTriggerOrdersXDR(publicKey, publicKey);
-      await signAndSubmit(xdr, publicKey);
-
-      const updatedPosList = await readPositions(publicKey);
-      setPositions(updatedPosList);
-
-      const bal = await fetchBalances(publicKey);
-      setBalances(bal);
-      const mBal = await readMarginBalance(publicKey);
-      setMarginBalance(mBal);
-      toast('Keeper Trigger Executed', 'success', 'Successfully processed TP/SL & liquidation check!');
-    } catch (e: unknown) {
-      toast('Keeper Trigger Failed', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -296,25 +265,6 @@ export default function Home() {
       toast('Order Cancelled', 'info', `Limit order #${orderIndex + 1} has been cancelled`);
     } catch (e: unknown) {
       toast('Cancel Order Error', 'error', e instanceof Error ? e.message : String(e));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleModifyTpSl = async (positionId: number, tp: number, sl: number, trailing: number) => {
-    if (!publicKey) return;
-    setIsSubmitting(true);
-    try {
-      const sessionKey = getSessionKey();
-      const caller = sessionKey?.publicKey ?? publicKey;
-      const xdr = await buildModifyTpSlXDR(caller, publicKey, positionId, tp, sl, trailing);
-      await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
-
-      const posList = await readPositions(publicKey);
-      setPositions(posList);
-      toast('TP/SL Updated', 'success', 'Position Take Profit & Stop Loss updated successfully');
-    } catch (e: unknown) {
-      toast('Modify TP/SL Error', 'error', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -440,11 +390,9 @@ export default function Home() {
             fundingPnl={fundingPnl}
             isSubmitting={isSubmitting}
             onClosePosition={handleClosePosition}
-            onTriggerKeeper={handleTriggerKeeper}
             onSharePnL={() => setShowShareCard(true)}
             onUpdateTrailingStop={handleUpdateTrailingStop}
             onCancelOrder={handleCancelOrder}
-            onModifyTpSl={handleModifyTpSl}
           />
         </div>
 

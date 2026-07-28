@@ -314,7 +314,7 @@ fn test_limit_orders() {
     set_dummy_price(&env, &oracle_id, "BTC", 60000_0000000);
 
     client.deposit_margin(&user, &102_0000000);
-    client.place_limit_order(&user, &user, &100_0000000, &10, &true, &55000_0000000, &65000_0000000, &50000_0000000, &0);
+    client.place_limit_order(&user, &user, &Symbol::new(&env, "BTC"), &100_0000000, &10, &true, &55000_0000000, &65000_0000000, &50000_0000000, &0);
 
     let orders = client.get_limit_orders(&user);
     assert_eq!(orders.len(), 1);
@@ -327,6 +327,7 @@ fn test_limit_orders() {
     let positions = client.get_positions(&user);
     assert_eq!(positions.len(), 1);
     assert_eq!(positions.get(0).unwrap().entry_price, 54000_0000000);
+    assert_eq!(positions.get(0).unwrap().symbol, Symbol::new(&env, "BTC"));
 }
 
 #[test]

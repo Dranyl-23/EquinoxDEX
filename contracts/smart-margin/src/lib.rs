@@ -19,6 +19,7 @@ pub struct Position {
 #[contracttype]
 #[derive(Clone)]
 pub struct Order {
+    pub symbol: Symbol,
     pub margin: i128,
     pub leverage: u32,
     pub is_long: bool,
@@ -413,12 +414,12 @@ impl SmartMarginContract {
         Ok(tokens_to_return)
     }
 
-    fn fetch_price(env: &Env) -> Result<i128, Error> {
+    fn fetch_price(env: &Env, symbol: &Symbol) -> Result<i128, Error> {
         let oracle_addr: Address = env.storage().instance().get(&DataKey::OracleAddress).ok_or(Error::NotInitialized)?;
         let price: i128 = env.invoke_contract(
             &oracle_addr,
             &Symbol::new(env, "get_price"),
-            vec![env, Symbol::new(env, "BTC").into_val(env)]
+            vec![env, symbol.into_val(env)]
         );
         if price <= 0 {
             return Err(Error::OracleError);
@@ -430,7 +431,7 @@ impl SmartMarginContract {
         Self::verify_caller(&env, &user, &caller)?;
         
         let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).ok_or(Error::NotInitialized)?;
-        let entry_price = Self::fetch_price(&env)?;
+        let entry_price = Self::fetch_price(&env, &symbol)?;
         
         if margin <= 0 || leverage < 1 {
             return Err(Error::InvalidMargin);
@@ -523,7 +524,7 @@ impl SmartMarginContract {
         Ok(pos_id)
     }
 
-    pub fn place_limit_order(env: Env, caller: Address, user: Address, margin: i128, leverage: u32, is_long: bool, trigger_price: i128, take_profit: i128, stop_loss: i128, trailing_stop_distance: i128) -> Result<(), Error> {
+    pub fn place_limit_order(env: Env, caller: Address, user: Address, symbol: Symbol, margin: i128, leverage: u32, is_long: bool, trigger_price: i128, take_profit: i128, stop_loss: i128, trailing_stop_distance: i128) -> Result<(), Error> {
         Self::verify_caller(&env, &user, &caller)?;
         if margin <= 0 || leverage < 1 {
             return Err(Error::InvalidMargin);
@@ -536,6 +537,7 @@ impl SmartMarginContract {
         // Do not deduct for limit order, it will be checked upon execution.
 
         let order = Order {
+            symbol,
             margin,
             leverage,
             is_long,
@@ -577,11 +579,17 @@ impl SmartMarginContract {
             return Ok(0);
         }
         
-        let current_price = Self::fetch_price(&env)?;
         let mut executed_count = 0;
         let mut remaining_orders = soroban_sdk::Vec::new(&env);
         
         for order in orders.iter() {
+            let current_price = match Self::fetch_price(&env, &order.symbol) {
+                Ok(p) => p,
+                Err(_) => {
+                    remaining_orders.push_back(order);
+                    continue;
+                }
+            };
             let mut triggered = false;
             if order.is_long && current_price <= order.trigger_price {
                 triggered = true;
@@ -598,9 +606,17 @@ impl SmartMarginContract {
                 let total_short_oi: i128 = env.storage().instance().get(&DataKey::TotalShortOI).unwrap_or(0);
                 
                 let total_oi = total_long_oi + total_short_oi + position_size;
-                if total_oi <= total_aum * 5 {
-                    let mut user_bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
-                    if user_bal < order.margin + open_fee {
+                if total_oi > total_aum * 10 {
+                    remaining_orders.push_back(order); // Insufficient liquidity
+                    continue;
+                }
+
+                let mut user_bal: i128 = env.storage().persistent().get(&DataKey::MarginBalance(user.clone())).unwrap_or(0);
+                if user_bal >= order.margin + open_fee {
+                    let pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(env.storage().instance().get(&DataKey::UsdcToken).unwrap())).unwrap_or(0);
+                    let max_oi = pool_bal * 5;
+                    let asset_oi = if order.is_long { total_long_oi } else { total_short_oi } + position_size;
+                    if asset_oi > max_oi {
                         remaining_orders.push_back(order);
                         continue;
                     }
@@ -609,17 +625,16 @@ impl SmartMarginContract {
 
                     Self::update_funding(&env);
                     let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
-                    let token_addr: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
                     
-                    let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(token_addr.clone())).unwrap_or(0);
+                    let mut pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance(env.storage().instance().get(&DataKey::UsdcToken).unwrap())).unwrap_or(0);
                     pool_bal += open_fee;
-                    env.storage().instance().set(&DataKey::PoolBalance(token_addr.clone()), &pool_bal);
+                    env.storage().instance().set(&DataKey::PoolBalance(env.storage().instance().get(&DataKey::UsdcToken).unwrap()), &pool_bal);
                     
                     let pos_id: u64 = env.storage().persistent().get(&DataKey::NextPosId(user.clone())).unwrap_or(1);
 
                     let position = Position {
                         id: pos_id,
-                        symbol: Symbol::new(&env, "BTC"),
+                        symbol: order.symbol.clone(),
                         margin: order.margin,
                         leverage: order.leverage,
                         entry_price: current_price,
@@ -694,23 +709,24 @@ impl SmartMarginContract {
             return Ok(());
         }
         let positions = positions_opt.unwrap();
-        let current_price = Self::fetch_price(&env)?;
         let mut updated_positions = soroban_sdk::Vec::new(&env);
         let mut updated_any = false;
 
         for mut position in positions.iter() {
             if position.trailing_stop_distance > 0 {
-                if position.is_long {
-                    let new_sl = current_price - position.trailing_stop_distance;
-                    if new_sl > position.stop_loss {
-                        position.stop_loss = new_sl;
-                        updated_any = true;
-                    }
-                } else {
-                    let new_sl = current_price + position.trailing_stop_distance;
-                    if new_sl < position.stop_loss || position.stop_loss == 0 {
-                        position.stop_loss = new_sl;
-                        updated_any = true;
+                if let Ok(current_price) = Self::fetch_price(&env, &position.symbol) {
+                    if position.is_long {
+                        let new_sl = current_price - position.trailing_stop_distance;
+                        if new_sl > position.stop_loss {
+                            position.stop_loss = new_sl;
+                            updated_any = true;
+                        }
+                    } else {
+                        let new_sl = current_price + position.trailing_stop_distance;
+                        if new_sl < position.stop_loss || position.stop_loss == 0 {
+                            position.stop_loss = new_sl;
+                            updated_any = true;
+                        }
                     }
                 }
             }
@@ -747,7 +763,7 @@ impl SmartMarginContract {
         let position = position_found.unwrap();
         let target_idx = target_index.unwrap();
 
-        let current_price = Self::fetch_price(env)?;
+        let current_price = Self::fetch_price(env, &position.symbol)?;
         let current_funding = env.storage().instance().get(&DataKey::GlobalFundingRate).unwrap_or(0);
 
         let mut actual_margin_to_close = margin_to_close;
@@ -911,12 +927,15 @@ impl SmartMarginContract {
             return Err(Error::NoPosition);
         }
         let positions = positions_opt.unwrap();
-        let current_price = Self::fetch_price(&env)?;
         
         let mut triggered_id: Option<u64> = None;
         let mut triggered_margin: i128 = 0;
 
         for position in positions.iter() {
+            let current_price = match Self::fetch_price(&env, &position.symbol) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
             let mut should_trigger = false;
 
             // 1. TP / SL Checks

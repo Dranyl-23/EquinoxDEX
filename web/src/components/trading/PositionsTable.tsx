@@ -16,12 +16,10 @@ interface PositionsTableProps {
   pnlPercent: number;
   fundingPnl: number;
   isSubmitting: boolean;
-  onClosePosition: (positionIdOrPct?: any, pct?: number) => Promise<void>;
-  onTriggerKeeper: () => Promise<void>;
+  onClosePosition: (positionId: number, pct?: number) => Promise<void>;
   onSharePnL: () => void;
   onUpdateTrailingStop?: () => Promise<void>;
   onCancelOrder?: (index: number) => Promise<void>;
-  onModifyTpSl?: (positionId: number, tp: number, sl: number, trailing: number) => Promise<void>;
 }
 
 export const PositionsTable: React.FC<PositionsTableProps> = ({
@@ -36,14 +34,12 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   fundingPnl,
   isSubmitting,
   onClosePosition,
-  onTriggerKeeper,
   onSharePnL,
   onUpdateTrailingStop,
   onCancelOrder,
-  onModifyTpSl,
 }) => {
   const { settings } = useSettings();
-  const { t, formatNum } = useLanguage();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'history'>('positions');
   const [selectedCloseId, setSelectedCloseId] = useState<number | null>(null);
 
@@ -53,8 +49,6 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   const handleClose = (posId?: number, pct?: number) => {
     if (typeof posId === 'number') {
       onClosePosition(posId, pct);
-    } else {
-      onClosePosition(posId);
     }
   };
 
@@ -247,7 +241,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
             </table>
           )}
 
-          {activeTab === 'orders' && (
+          {activeTab === 'orders' ? (
             <table className="w-full text-left text-sm min-w-[600px]">
               <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider sticky top-0 z-10">
                 <tr>
@@ -301,7 +295,17 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                 )}
               </tbody>
             </table>
-          )}
+          ) : activeTab === 'history' ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 text-sm text-muted">
+              <p className="mb-4">Trade history is available on the dedicated history page.</p>
+              <a
+                href="/history"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand/20 text-brand font-semibold border border-brand/30 hover:bg-brand/30"
+              >
+                View Trade History
+              </a>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

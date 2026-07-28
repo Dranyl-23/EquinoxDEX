@@ -25,20 +25,23 @@ export const AccountModeModal: React.FC<AccountModeModalProps> = ({
       badge: 'Default',
       description:
         'Account equity is shared across all active perpetual positions. Perps use settlement collateral jointly to minimize liquidation risk.',
+      available: true,
     },
     {
       id: 'isolated' as const,
       title: 'Isolated Risk Margin',
-      badge: 'Risk Control',
+      badge: 'Coming Soon',
       description:
         'Collateral is strictly assigned per individual trade. Liquidation is restricted to the specific trade margin without affecting overall account balance.',
+      available: false,
     },
     {
       id: 'portfolio' as const,
       title: 'Multi-Asset Portfolio Collateral',
-      badge: 'Multi-Token',
+      badge: 'Coming Soon',
       description:
         'Advanced institutional mode allowing XLM and USDC native Stellar tokens to directly back perpetual positions without manual swapping.',
+      available: false,
     },
   ];
 
@@ -65,13 +68,17 @@ export const AccountModeModal: React.FC<AccountModeModalProps> = ({
               <button
                 key={opt.id}
                 onClick={() => {
+                  if (!opt.available) return;
                   onSelectMode(opt.id);
                   onClose();
                 }}
-                className={`flex flex-col gap-1.5 p-4 rounded-xl border text-left transition-all cursor-pointer relative ${
+                disabled={!opt.available}
+                className={`flex flex-col gap-1.5 p-4 rounded-xl border text-left transition-all relative ${
                   isSelected
                     ? 'bg-brand/10 border-brand text-white shadow-md'
-                    : 'bg-background/60 border-border/50 hover:border-brand/40 text-muted hover:text-white'
+                    : opt.available
+                    ? 'bg-background/60 border-border/50 hover:border-brand/40 text-muted hover:text-white'
+                    : 'bg-background/30 border-border/20 text-muted/70 cursor-not-allowed'
                 }`}
               >
                 <div className="flex justify-between items-center">

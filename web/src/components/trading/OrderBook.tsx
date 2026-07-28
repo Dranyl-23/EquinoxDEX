@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../LanguageProvider';
 
 interface OrderBookEntry {
@@ -22,7 +22,6 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
   const [bids, setBids] = useState<OrderBookEntry[]>([]);
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
   const [trades, setTrades] = useState<TradeEntry[]>([]);
-  const maxTotalRef = useRef<number>(1);
 
   // 1. High-frequency 100ms Orderbook Depth Stream with bfcache guard
   useEffect(() => {
@@ -68,7 +67,6 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
                 return { price, size, total: askTotal };
               }).reverse();
 
-              maxTotalRef.current = Math.max(bidTotal, askTotal, 1);
               setBids(formattedBids);
               setAsks(formattedAsks);
             }
@@ -176,6 +174,7 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
     };
   }, [symbol]);
 
+  const maxTotal = Math.max(1, ...asks.map((entry) => entry.total), ...bids.map((entry) => entry.total));
   const spread = asks.length > 0 && bids.length > 0
     ? (asks[asks.length - 1].price - bids[0].price).toFixed(2)
     : '0.00';
@@ -211,7 +210,7 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
               <span>{t('size') || 'Size'} (BTC)</span>
             </div>
             {asks.map((entry, idx) => {
-              const depthPct = Math.min(100, (entry.total / maxTotalRef.current) * 100);
+              const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
               return (
                 <div key={idx} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden">
                   <div
@@ -236,7 +235,7 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
           {/* Bids (Buys) */}
           <div className="flex flex-col gap-0.5 flex-1">
             {bids.map((entry, idx) => {
-              const depthPct = Math.min(100, (entry.total / maxTotalRef.current) * 100);
+              const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
               return (
                 <div key={idx} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden">
                   <div
