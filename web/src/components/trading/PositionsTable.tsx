@@ -5,6 +5,18 @@ import { DECIMALS } from '@/lib/constants';
 import { useSettings } from '../SettingsProvider';
 import { useLanguage } from '../LanguageProvider';
 
+const deriveBaseAsset = (symbol: string): string => {
+  if (!symbol) return 'BTC';
+  const normalized = symbol.toUpperCase();
+  const quoteSuffixes = ['USDT', 'USDC', 'USD', 'EUR', 'GBP'];
+  for (const suffix of quoteSuffixes) {
+    if (normalized.endsWith(suffix)) {
+      return normalized.slice(0, normalized.length - suffix.length);
+    }
+  }
+  return symbol;
+};
+
 interface PositionsTableProps {
   publicKey: string | null;
   position?: Position | null;
@@ -12,6 +24,7 @@ interface PositionsTableProps {
   pendingPosition: Position | null;
   limitOrders: Order[];
   currentPrice: number;
+  globalFunding: number;
   pnl: number;
   pnlPercent: number;
   fundingPnl: number;
@@ -29,6 +42,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   pendingPosition,
   limitOrders,
   currentPrice,
+  globalFunding,
   pnl,
   pnlPercent,
   fundingPnl,
@@ -134,11 +148,23 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                   <>
                     {displayPositions.map((pos) => {
                       const entryUsd = pos.entry_price / DECIMALS;
+                      const rawMargin = pos.margin / DECIMALS;
                       const liqFrac = 0.98 / pos.leverage;
                       const liqPrice = pos.is_long 
                         ? entryUsd * (1 - liqFrac)
                         : entryUsd * (1 + liqFrac);
-
+                      const positionSize = rawMargin * pos.leverage;
+                      const priceDiff = pos.is_long ? currentPrice - entryUsd : entryUsd - currentPrice;
+                      const pricePnl = entryUsd > 0 ? (priceDiff * positionSize) / entryUsd : 0;
+                      const rawCurrentFunding = globalFunding / DECIMALS;
+                      const rawEntryFunding = pos.funding_index_at_entry / DECIMALS;
+                      const fundingDiff = rawCurrentFunding - rawEntryFunding;
+                      const posFundingPnl = pos.is_long
+                        ? -(fundingDiff * positionSize) / 10_000_000_000
+                        : (fundingDiff * positionSize) / 10_000_000_000;
+                      const positionPnl = pricePnl + posFundingPnl;
+                      const baseAsset = deriveBaseAsset(pos.symbol || 'BTC');
+ 
                       return (
                         <tr key={pos.id || pos.symbol} className="hover:bg-panel/30 transition-colors">
                           <td className="px-4 py-3">
@@ -147,9 +173,9 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                               {pos.leverage}x {pos.is_long ? 'Long' : 'Short'}
                             </span>
                           </td>
-                          <td className="px-4 py-3 font-mono">{currentPrice > 0 ? ((pos.margin / DECIMALS) * pos.leverage / currentPrice).toFixed(4) : "..."} BTC</td>
-                          <td className="px-4 py-3 font-mono">{pos.margin / DECIMALS} USDC</td>
-                          <td className="px-4 py-3 font-mono">${(pos.entry_price / DECIMALS).toLocaleString()}</td>
+                          <td className="px-4 py-3 font-mono">{currentPrice > 0 ? (positionSize / currentPrice).toFixed(4) : '...'} {baseAsset}</td>
+                          <td className="px-4 py-3 font-mono">{rawMargin} USDC</td>
+                          <td className="px-4 py-3 font-mono">${entryUsd.toLocaleString()}</td>
                           <td className="px-4 py-3 font-mono text-danger font-semibold" title="Cross-Margin Liquidation Trigger Price">
                             ${liqPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
@@ -157,10 +183,10 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
                             {pos.take_profit > 0 ? <span className="text-brand">TP: ${(pos.take_profit / DECIMALS).toLocaleString()}</span> : 'No TP'}<br/>
                             {pos.stop_loss > 0 ? <span className="text-danger">SL: ${(pos.stop_loss / DECIMALS).toLocaleString()}</span> : 'No SL'}
                           </td>
-                          <td className={`px-4 py-3 font-mono ${pnl >= 0 ? 'text-brand' : 'text-danger'}`}>
-                            {settings?.hidePnl ? '****.** (****%)' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`}
+                          <td className={`px-4 py-3 font-mono ${positionPnl >= 0 ? 'text-brand' : 'text-danger'}`}>
+                            {settings?.hidePnl ? '****.** (****%)' : `${positionPnl >= 0 ? '+' : ''}${positionPnl.toFixed(2)} (${rawMargin > 0 ? ((positionPnl / rawMargin) * 100).toFixed(2) : '0.00'}%)`}
                             <div className="text-xs text-muted font-sans mt-0.5" title="Funding PnL">
-                              Funding: {settings?.hidePnl ? '****.**' : `${fundingPnl >= 0 ? '+' : ''}${fundingPnl.toFixed(2)}`}
+                              Funding: {settings?.hidePnl ? '****.**' : `${posFundingPnl >= 0 ? '+' : ''}${posFundingPnl.toFixed(2)}`}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">

@@ -9,7 +9,7 @@ import { TransactionBuilder, Keypair } from '@stellar/stellar-sdk';
  * (trustlines, contract calls) that don't need granular status UI.
  */
 export async function signAndSubmit(xdr: string, address: string, forceFreighter: boolean = false): Promise<string> {
-  const sessionKey = getSessionKey();
+  const sessionKey = await getSessionKey();
   
   let finalXdr = xdr;
   

@@ -21,7 +21,8 @@ export function useReferral(publicKey: string | null) {
   useEffect(() => {
     if (!publicKey || !referrerCode || !contractConfigured()) return;
     // Only register valid Stellar public keys and skip self-referrals
-    if (referrerCode === publicKey || !referrerCode.startsWith('G') || referrerCode.length !== 56) return;
+    const isValidStellarAddress = /^G[A-Z2-7]{55}$/.test(referrerCode);
+    if (referrerCode === publicKey || !isValidStellarAddress) return;
 
     const registeredKey = `equinox_ref_registered_${publicKey}`;
     if (localStorage.getItem(registeredKey)) return;

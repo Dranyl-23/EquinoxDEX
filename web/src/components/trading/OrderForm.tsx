@@ -6,11 +6,24 @@ import { DECIMALS } from '@/lib/constants';
 import { playOrderPlacedSound, playTradeExecutedSound } from '@/lib/sound';
 import { useLanguage } from '../LanguageProvider';
 
+const deriveBaseAsset = (marketSymbol: string): string => {
+  if (!marketSymbol) return 'BTC';
+  const normalized = marketSymbol.toUpperCase();
+  const quoteSuffixes = ['USDT', 'USDC', 'USD', 'EUR', 'GBP'];
+  for (const suffix of quoteSuffixes) {
+    if (normalized.endsWith(suffix)) {
+      return normalized.slice(0, normalized.length - suffix.length);
+    }
+  }
+  return marketSymbol;
+};
+
 export interface OrderFormProps {
   publicKey: string | null;
   balances: Balances | null;
   marginBalance: number;
   currentPrice: number;
+  selectedMarket: string;
   position: Position | null;
   pnl: number;
   isSubmitting: boolean;
@@ -33,6 +46,7 @@ export interface OrderFormProps {
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
+  selectedMarket,
   balances,
   marginBalance,
   currentPrice,
@@ -59,11 +73,12 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [showCollateralDrawer, setShowCollateralDrawer] = useState(false);
   const [collateralTab, setCollateralTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [slippage, setSlippage] = useState<number>(0.5);
+  const baseAsset = deriveBaseAsset(selectedMarket);
 
   const marginVal = parseFloat(marginInput);
   const isValidMargin = !isNaN(marginVal) && marginVal > 0;
   const sizeVal = isValidMargin ? marginVal * leverage : 0;
-  const sizeInBtc = currentPrice > 0 ? (sizeVal / currentPrice).toFixed(4) : "0.0000";
+  const sizeInBase = currentPrice > 0 ? (sizeVal / currentPrice).toFixed(4) : '0.0000';
 
   // Real-Time Price Impact Estimation (<0.01% for normal size, scaling linearly with order size)
   const priceImpactPercent = sizeVal > 0 ? Math.min((sizeVal / 500000) * 100, 2.5) : 0.01;
@@ -306,7 +321,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         <div className="bg-background/60 rounded-xl p-3 border border-border/50 flex flex-col gap-1.5 text-xs font-mono select-none">
           <div className="flex justify-between items-center text-muted">
             <span>Order Size</span>
-            <span className="text-white font-semibold">{sizeInBtc} BTC (${sizeVal.toFixed(2)})</span>
+            <span className="text-white font-semibold">{sizeInBase} {baseAsset} (${sizeVal.toFixed(2)})</span>
           </div>
           <div className="flex justify-between items-center text-muted">
             <span>Est. Liq Price</span>
@@ -336,8 +351,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             </div>
           </div>
           <div className="flex justify-between items-center text-muted pt-1 border-t border-border/30">
-            <span>Est. Trading Fee (0.02%)</span>
-            <span className="text-white">${(sizeVal * 0.0002).toFixed(4)}</span>
+            <span>Est. Trading Fee (0.10%)</span>
+            <span className="text-white">${(sizeVal * 0.001).toFixed(4)}</span>
           </div>
         </div>
 

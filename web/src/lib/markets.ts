@@ -86,7 +86,6 @@ EXTRA_SYMBOLS.forEach(sym => {
       name: `${sym} Perpetual`,
       category: 'Top',
       maxLeverage: 50,
-      change24h: (Math.random() * 15 - 5),
     });
   }
 });

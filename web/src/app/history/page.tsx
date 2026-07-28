@@ -14,12 +14,19 @@ export default function TradeHistoryPage() {
   const [loading, setLoading] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<string>('ALL');
 
+  const loadHistory = async (address: string) => {
+    setLoading(true);
+    try {
+      const records = await readTradeHistory(address);
+      setHistory(records);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!publicKey || !contractConfigured()) return;
-    setLoading(true);
-    readTradeHistory(publicKey)
-      .then(setHistory)
-      .finally(() => setLoading(false));
+    void Promise.resolve().then(() => loadHistory(publicKey));
   }, [publicKey]);
 
   // Derived stats from real on-chain data
@@ -29,11 +36,20 @@ export default function TradeHistoryPage() {
   const totalRealizedPnl = history.reduce((acc, curr) => acc + curr.pnl / DECIMALS, 0);
 
   // Get unique markets from history for filter
-  const markets = ['ALL', ...Array.from(new Set(history.map((h) => `POS-${h.positionId}`)))];
+  const markets = [
+    'ALL',
+    ...Array.from(
+      new Set(
+        history.map((h) => h.symbol || `POS-${h.positionId}`),
+      ),
+    ),
+  ];
   const filteredHistory =
     selectedMarket === 'ALL'
       ? history
-      : history.filter((h) => `POS-${h.positionId}` === selectedMarket);
+      : history.filter(
+          (h) => h.symbol === selectedMarket || `POS-${h.positionId}` === selectedMarket,
+        );
 
   const formatTimestamp = (ts: number) => {
     if (!ts) return '—';
@@ -103,6 +119,7 @@ export default function TradeHistoryPage() {
             <thead className="bg-background/60 border-b border-border">
               <tr>
                 <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase tracking-wider">Position ID</th>
+                <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase tracking-wider">Market</th>
                 <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase tracking-wider">Margin Closed</th>
                 <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase tracking-wider">{t('exitPrice')}</th>
                 <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase tracking-wider">Realized PnL</th>
@@ -136,8 +153,11 @@ export default function TradeHistoryPage() {
                   return (
                     <tr key={trade.id} className="hover:bg-panel/30 transition-colors">
                       <td className="px-4 py-3 font-mono text-white font-bold">#{trade.positionId}</td>
+                      <td className="px-4 py-3 font-mono text-white">{trade.symbol || 'Unknown'}</td>
                       <td className="px-4 py-3 font-mono">{formatNum(marginUsdc, 2)} USDC</td>
-                      <td className="px-4 py-3 font-mono text-muted">—</td>
+                      <td className="px-4 py-3 font-mono text-muted">
+                        {trade.exitPrice != null ? `$${trade.exitPrice.toFixed(2)}` : '—'}
+                      </td>
                       <td className={`px-4 py-3 font-mono font-semibold ${pnlUsdc >= 0 ? 'text-brand' : 'text-danger'}`}>
                         {pnlUsdc >= 0 ? '+' : ''}{formatNum(pnlUsdc, 2)} USDC
                       </td>

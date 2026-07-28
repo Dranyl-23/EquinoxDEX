@@ -41,7 +41,7 @@ export class EquinoxDEXClient {
   private baseUrl: string;
 
   constructor(config: EquinoxClientConfig = {}) {
-    this.baseUrl = config.baseUrl || typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    this.baseUrl = config.baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
   }
 
   /**

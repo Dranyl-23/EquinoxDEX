@@ -138,7 +138,7 @@ export default function Home() {
       const triggerScaled = params.triggerInput ? parseFloat(params.triggerInput) * DECIMALS : 0;
       const isLong = params.positionType === 'Long';
 
-      const sessionKey = getSessionKey();
+      const sessionKey = await getSessionKey();
       const caller = sessionKey ? sessionKey.publicKey : publicKey;
 
       if (params.orderTab === 'Market') {
@@ -189,7 +189,7 @@ export default function Home() {
     if (!targetPos) return;
     setIsSubmitting(true);
     try {
-      const sessionKey = getSessionKey();
+      const sessionKey = await getSessionKey();
       const caller = sessionKey ? sessionKey.publicKey : publicKey;
       const marginToClose = (targetPos.margin * pct) / 100;
       const xdr = await buildClosePositionXDR(caller, publicKey, positionId, marginToClose);
@@ -255,7 +255,7 @@ export default function Home() {
     if (!publicKey) return;
     setIsSubmitting(true);
     try {
-      const sessionKey = getSessionKey();
+      const sessionKey = await getSessionKey();
       const caller = sessionKey?.publicKey ?? publicKey;
       const xdr = await buildCancelLimitOrderXDR(caller, publicKey, orderIndex);
       await signAndSubmit(xdr, caller === sessionKey?.publicKey ? sessionKey.publicKey : publicKey);
@@ -278,7 +278,7 @@ export default function Home() {
     } else {
       setIsSubmitting(true);
       try {
-        const session = generateSessionKey();
+        const session = await generateSessionKey();
         try {
           const fundXdr = await buildFundSessionKeyXDR(publicKey, session.publicKey);
           await signAndSubmit(fundXdr, publicKey, true);
@@ -333,8 +333,8 @@ export default function Home() {
     const positionSize = rawMargin * pos.leverage;
 
     const posFundingPnl = pos.is_long
-      ? -(fundingDiff * positionSize) / 1000
-      : (fundingDiff * positionSize) / 1000;
+      ? -(fundingDiff * positionSize) / 10_000_000_000
+      : (fundingDiff * positionSize) / 10_000_000_000;
 
     fundingPnl += posFundingPnl;
     pnl += pricePnl + posFundingPnl;
@@ -385,6 +385,7 @@ export default function Home() {
             pendingPosition={pendingPosition}
             limitOrders={limitOrders}
             currentPrice={currentPrice}
+            globalFunding={marketState.global_funding}
             pnl={pnl}
             pnlPercent={pnlPercent}
             fundingPnl={fundingPnl}
@@ -402,6 +403,7 @@ export default function Home() {
           balances={balances}
           marginBalance={marginBalance}
           currentPrice={currentPrice}
+          selectedMarket={selectedMarket}
           position={firstPos}
           pnl={pnl}
           isSubmitting={isSubmitting}

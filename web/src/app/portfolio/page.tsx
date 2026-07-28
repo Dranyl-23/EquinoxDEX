@@ -5,7 +5,7 @@ import { fetchBalances, Balances } from '@/lib/balances';
 import { readPoolState, buildAddLiquidityXDR, buildRemoveLiquidityXDR, contractConfigured } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
 import { USDC_TOKEN_ID, XLM_TOKEN_ID } from '@/lib/stellar';
-import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
+import { DECIMALS, RPC_POLL_INTERVAL, VAULT_APY_EST } from '@/lib/constants';
 import { useLanguage } from '@/components/LanguageProvider';
 import { useToast } from '@/components/Toast';
 
@@ -134,7 +134,7 @@ export default function Portfolio() {
           </div>
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('estimatedApr')}</div>
-            <div className="text-2xl font-mono font-bold text-green-500">TBD</div>
+            <div className="text-2xl font-mono font-bold text-green-500">{VAULT_APY_EST.toFixed(1)}%</div>
             <div className="text-xs text-muted mt-1">Based on 7-day average</div>
           </div>
           <div className="bg-panel border border-border rounded-lg p-5">

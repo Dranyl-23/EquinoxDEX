@@ -11,7 +11,7 @@ import {
 } from '@/lib/contract';
 import { signAndSubmit } from '@/lib/sign';
 import { USDC_TOKEN_ID } from '@/lib/stellar';
-import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
+import { DECIMALS, RPC_POLL_INTERVAL, VAULT_APY_EST } from '@/lib/constants';
 import { useLanguage } from '@/components/LanguageProvider';
 import { useToast } from '@/components/Toast';
 
@@ -28,8 +28,7 @@ export default function VaultsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Estimated stats (no on-chain APY oracle — clearly labelled as estimates)
-  const APY_EST = 24.8;
-  const DAILY_YIELD_EST_PCT = APY_EST / 365 / 100;
+  const DAILY_YIELD_EST_PCT = VAULT_APY_EST / 365 / 100;
 
   useEffect(() => {
     if (!contractConfigured()) return;
@@ -148,7 +147,7 @@ export default function VaultsPage() {
 
           <div className="bg-panel border border-border rounded-lg p-5">
             <div className="text-sm text-muted mb-1">{t('estimatedApr')}</div>
-            <div className="text-2xl font-mono font-bold text-green-500">{APY_EST}% APY</div>
+            <div className="text-2xl font-mono font-bold text-green-500">{VAULT_APY_EST}% APY</div>
             <div className="text-xs text-muted mt-1">Est. · Auto-compounded</div>
           </div>
 
@@ -166,7 +165,7 @@ export default function VaultsPage() {
               ${dailyYield.toLocaleString(undefined, { maximumFractionDigits: 0 })}{' '}
               <span className="text-sm text-muted font-sans font-normal">USDC</span>
             </div>
-            <div className="text-xs text-muted mt-1">Est. · based on {APY_EST}% APY</div>
+            <div className="text-xs text-muted mt-1">Est. · based on {VAULT_APY_EST}% APY</div>
           </div>
         </div>
 

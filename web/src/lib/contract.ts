@@ -729,6 +729,8 @@ export interface TradeRecord {
   pnl: number;            // raw scaled i128 (can be negative)
   timestamp: number;      // unix seconds from ledger
   txHash: string;
+  symbol?: string;
+  exitPrice?: number;
 }
 
 /**
@@ -784,16 +786,38 @@ export async function readTradeHistory(userAddress: string): Promise<TradeRecord
 
       // Parse event body: (position_id, margin_closed, pnl)
       try {
-        const body = scValToNative(event.value) as [bigint, bigint, bigint];
+        const body = scValToNative(event.value) as Array<bigint | string>;
+        let symbol: string | undefined;
+        let exitPrice: number | undefined;
+        let positionId = 0;
+        let marginClosed = 0;
+        let pnlValue = 0;
+
+        if (body.length === 5) {
+          positionId = Number(body[0] as bigint);
+          marginClosed = Number(body[1] as bigint);
+          pnlValue = Number(body[2] as bigint);
+          symbol = String(body[3]);
+          exitPrice = Number(body[4] as bigint) / DECIMALS;
+        } else if (body.length === 3) {
+          positionId = Number(body[0] as bigint);
+          marginClosed = Number(body[1] as bigint);
+          pnlValue = Number(body[2] as bigint);
+        } else {
+          continue;
+        }
+
         records.push({
           id: event.id,
-          positionId: Number(body[0]),
-          marginClosed: Number(body[1]),
-          pnl: Number(body[2]),
+          positionId,
+          marginClosed,
+          pnl: pnlValue,
           timestamp: event.ledgerClosedAt
             ? Math.floor(new Date(event.ledgerClosedAt).getTime() / 1000)
             : 0,
           txHash: event.txHash ?? '',
+          symbol,
+          exitPrice,
         });
       } catch {
         continue;
@@ -849,10 +873,16 @@ export async function readReferralStats(referrerAddress: string): Promise<{
 }
 
 /** Build XDR to register a referral relationship on-chain */
+const STELLAR_PUBLIC_KEY_REGEX = /^G[A-Z2-7]{55}$/;
+
 export async function buildRegisterReferralXDR(
   referee: string,
   referrer: string
 ): Promise<string> {
+  if (!STELLAR_PUBLIC_KEY_REGEX.test(referrer)) {
+    throw new Error('Invalid referrer address');
+  }
+
   const contract = new Contract(CONTRACT_ID);
   const account = await server.getAccount(referee);
 
