@@ -15,9 +15,16 @@ import { useLanguage } from './LanguageProvider';
 export default function Navbar() {
   const wallet = useWalletContext();
   const pathname = usePathname();
-  const [notifGranted, setNotifGranted] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? isNotificationGranted() : false
-  );
+  const [notifGranted, setNotifGranted] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const timeout = window.setTimeout(() => {
+        setNotifGranted(isNotificationGranted());
+      }, 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, []);
   const [showEcosystem, setShowEcosystem] = useState<boolean>(false);
   const [showLanguageModal, setShowLanguageModal] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);

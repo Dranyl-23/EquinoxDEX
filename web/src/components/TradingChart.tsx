@@ -54,7 +54,15 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
   
   // Minimize/Maximize & Axis toggles
   const [showRightScale, setShowRightScale] = useState(true);
-  const [showTools, setShowTools] = useState(() => typeof window !== 'undefined' ? window.innerWidth > 768 : true);
+  const [showTools, setShowTools] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        setShowTools(window.innerWidth > 768);
+      }, 0);
+    }
+  }, []);
 
   // Initialize Chart once & set up ResizeObserver for perfect timeScale visibility
   useEffect(() => {
