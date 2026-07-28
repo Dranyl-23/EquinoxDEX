@@ -30,7 +30,7 @@ export function useReferral(publicKey: string | null) {
     const registerOnChain = async () => {
       try {
         const xdr = await buildRegisterReferralXDR(publicKey, referrerCode);
-        await signAndSubmit(xdr, publicKey, true);
+        await signAndSubmit(xdr, publicKey, false);
         localStorage.setItem(registeredKey, 'true');
       } catch {
         // Silently swallow if already registered or failed

@@ -4,22 +4,19 @@
  * Automatically executes TP/SL triggers and liquidations to earn the 1.5% keeper bounty!
  */
 
-import { rpc, Contract, Address, TransactionBuilder, Keypair, BASE_FEE } from '@stellar/stellar-sdk';
+import { Keypair } from '@stellar/stellar-sdk';
+import { NETWORK_PASSPHRASE } from './stellar';
 
-const RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
-const NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
-const CONTRACT_ID = process.env.CONTRACT_ID || 'CAAITOVUWRENIVCLDX7BOLXWX6UVXGFNCG2564J7NHHSZU4Y4RC72NCJ';
-
-// Keeper Bot Keypair (In production, load from env / secret vault)
-const KEEPER_SECRET = process.env.KEEPER_SECRET_KEY || 'SAKEEPERBOTSECRETKEYDEMO1234567890000000000000000000';
+const KEEPER_SECRET = process.env.KEEPER_SECRET_KEY;
+if (!KEEPER_SECRET) {
+  throw new Error('KEEPER_SECRET_KEY env var must be set to run the keeper bot');
+}
+if (!NETWORK_PASSPHRASE) {
+  throw new Error('NETWORK_PASSPHRASE must be defined in ./stellar');
+}
+Keypair.fromSecret(KEEPER_SECRET); // validate secret format at startup
 
 async function runKeeperLoop() {
-  console.log('🤖 EquinoxDEX Automated Keeper Bot initialized.');
-  console.log(`Connecting to Soroban RPC: ${RPC_URL}`);
-  console.log(`Target Contract: ${CONTRACT_ID}`);
-
-  const server = new rpc.Server(RPC_URL);
-
   setInterval(async () => {
     try {
       // In production, keeper queries active traders list from indexer or event stream
@@ -28,8 +25,8 @@ async function runKeeperLoop() {
       ];
 
       for (const trader of activeTraders) {
+        void trader;
         try {
-          console.log(`[Keeper] Checking triggers for trader ${trader.slice(0, 8)}...`);
           // Simulation check for trigger_orders
           // If simulation succeeds, build and submit keeper execution tx
         } catch {

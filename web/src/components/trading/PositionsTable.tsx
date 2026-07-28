@@ -118,7 +118,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
       <div className="flex-1 overflow-hidden p-2 sm:p-4">
         <div className="w-full border border-border/60 rounded-lg bg-background overflow-auto h-full flex flex-col shadow-inner">
           {activeTab === 'positions' && (
-            <table className="w-full text-left text-sm min-w-[800px]">
+            <table className="w-full text-left text-sm min-w-200">
               <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">{t('market') || 'Market'}</th>
@@ -268,7 +268,7 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
           )}
 
           {activeTab === 'orders' ? (
-            <table className="w-full text-left text-sm min-w-[600px]">
+            <table className="w-full text-left text-sm min-w-150">
               <thead className="bg-panel/60 text-muted border-b border-border/60 text-xs uppercase tracking-wider sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Type</th>

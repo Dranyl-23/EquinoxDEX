@@ -20,9 +20,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="min-h-[100dvh] antialiased dark"
+      className="min-h-dvh antialiased dark"
     >
-      <body className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-brand selection:text-white font-sans">
+      <body className="min-h-dvh flex flex-col bg-background text-foreground selection:bg-brand selection:text-white font-sans">
         <WalletProvider>
           <LanguageProvider>
             <SettingsProvider>

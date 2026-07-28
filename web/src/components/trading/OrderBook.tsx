@@ -209,19 +209,29 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
               <span>{t('priceUsdc') ? t('priceUsdc').replace('USDC', '$') : 'Price ($)'}</span>
               <span>{t('size') || 'Size'} (BTC)</span>
             </div>
-            {asks.map((entry, idx) => {
-              const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
-              return (
-                <div key={idx} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden">
-                  <div
-                    className="absolute right-0 top-0 bottom-0 bg-danger/15 transition-all duration-75 pointer-events-none"
-                    style={{ width: `${depthPct}%` }}
-                  />
-                  <span className="text-danger font-medium z-10">{entry.price.toFixed(2)}</span>
-                  <span className="text-muted z-10">{entry.size.toFixed(4)}</span>
+            {asks.length === 0 ? (
+              Array.from({ length: 6 }).map((_, idx) => (
+                <div key={`ask-skeleton-${idx}`} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden animate-pulse">
+                  <div className="absolute right-0 top-0 bottom-0 bg-border/30 w-full" />
+                  <span className="text-muted z-10">---</span>
+                  <span className="text-muted z-10">---</span>
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              asks.map((entry, idx) => {
+                const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
+                return (
+                  <div key={idx} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden">
+                    <div
+                      className="absolute right-0 top-0 bottom-0 bg-danger/15 transition-all duration-75 pointer-events-none"
+                      style={{ width: `${depthPct}%` }}
+                    />
+                    <span className="text-danger font-medium z-10">{entry.price.toFixed(2)}</span>
+                    <span className="text-muted z-10">{entry.size.toFixed(4)}</span>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* Current Spread Bar */}
@@ -234,19 +244,29 @@ export function OrderBook({ currentPrice, symbol = 'BTCUSDT' }: { currentPrice: 
 
           {/* Bids (Buys) */}
           <div className="flex flex-col gap-0.5 flex-1">
-            {bids.map((entry, idx) => {
-              const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
-              return (
-                <div key={idx} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden">
-                  <div
-                    className="absolute right-0 top-0 bottom-0 bg-emerald-500/15 transition-all duration-75 pointer-events-none"
-                    style={{ width: `${depthPct}%` }}
-                  />
-                  <span className="text-emerald-400 font-medium z-10">{entry.price.toFixed(2)}</span>
-                  <span className="text-muted z-10">{entry.size.toFixed(4)}</span>
+            {bids.length === 0 ? (
+              Array.from({ length: 6 }).map((_, idx) => (
+                <div key={`bid-skeleton-${idx}`} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden animate-pulse">
+                  <div className="absolute right-0 top-0 bottom-0 bg-border/30 w-full" />
+                  <span className="text-muted z-10">---</span>
+                  <span className="text-muted z-10">---</span>
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              bids.map((entry, idx) => {
+                const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
+                return (
+                  <div key={idx} className="relative flex justify-between items-center py-0.5 px-1 rounded overflow-hidden">
+                    <div
+                      className="absolute right-0 top-0 bottom-0 bg-emerald-500/15 transition-all duration-75 pointer-events-none"
+                      style={{ width: `${depthPct}%` }}
+                    />
+                    <span className="text-emerald-400 font-medium z-10">{entry.price.toFixed(2)}</span>
+                    <span className="text-muted z-10">{entry.size.toFixed(4)}</span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       ) : (

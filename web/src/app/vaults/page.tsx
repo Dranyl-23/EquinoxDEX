@@ -4,7 +4,6 @@ import { useWalletContext } from '@/components/WalletProvider';
 import { fetchBalances, Balances } from '@/lib/balances';
 import {
   readPoolState,
-  readMarginBalance,
   buildAddLiquidityXDR,
   buildRemoveLiquidityXDR,
   contractConfigured,
@@ -54,7 +53,7 @@ export default function VaultsPage() {
   // Derived on-chain stats
   const tvl = poolState.totalPool / DECIMALS;
   const elpPrice = poolState.totalShares > 0 ? poolState.totalPool / poolState.totalShares : 1;
-  const userElpBalance = poolState.userShares; // shares are the ELP token units
+  const userElpBalance = poolState.userShares / DECIMALS;
   const userDepositedUsdc =
     poolState.totalShares > 0
       ? (poolState.userShares * poolState.totalPool) / poolState.totalShares / DECIMALS

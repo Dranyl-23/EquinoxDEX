@@ -152,7 +152,7 @@ export const MarketSelectorModal: React.FC<MarketSelectorModalProps> = ({
                             {market.quoteAsset}
                           </span>
                         </div>
-                        <span className="text-[11px] text-muted truncate max-w-[120px] block">
+                        <span className="text-[11px] text-muted truncate max-w-30 block">
                           {market.name}
                         </span>
                       </div>

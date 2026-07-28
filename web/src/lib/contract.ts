@@ -211,7 +211,9 @@ export async function buildOpenPositionXDR(
 
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
-    console.error('Simulation failed', sim.error, sim.events);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Simulation failed', sim.error, sim.events);
+    }
     throw new Error('Simulation failed — Check testnet balance.');
   }
 
@@ -321,7 +323,9 @@ export async function buildPlaceLimitOrderXDR(
 
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
-    console.error('Simulation failed', sim.error, sim.events);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Simulation failed', sim.error, sim.events);
+    }
     throw new Error('Simulation failed — Check testnet balance or if order already exists.');
   }
 

@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import Image from 'next/image';
 import { DECIMALS } from '@/lib/constants';
 import { MARKETS } from '@/lib/markets';
 import { useLanguage } from '../LanguageProvider';
@@ -91,10 +92,8 @@ export function MarketHeader({
 }: MarketHeaderProps) {
   const { t, formatNum } = useLanguage();
  
-  const skew = marketState.long_oi - marketState.short_oi;
-  const skewDisplay = (skew / DECIMALS).toLocaleString();
-  const isSkewLong = skew > 0;
-  const isSkewShort = skew < 0;
+  const openInterest = (marketState.long_oi + marketState.short_oi) / DECIMALS;
+  const openInterestDisplay = openInterest.toLocaleString();
 
   const currentObj = MARKETS.find((m) => m.symbol === selectedMarket) || {
     symbol: selectedMarket,
@@ -110,14 +109,14 @@ export function MarketHeader({
       <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full md:w-auto justify-between md:justify-start">
         {/* App Logo */}
         <div className="flex items-center gap-2 mr-1 sm:mr-3">
-          <img src="/equinox_logo.png" alt="Equinox DEX" className="w-10 h-10 mix-blend-screen rounded-xl" />
+          <Image src="/equinox_logo.png" alt="Equinox DEX" className="w-10 h-10 mix-blend-screen rounded-xl" width={40} height={40} />
           <span className="font-bold text-white text-xl tracking-tight hidden lg:block">Equinox</span>
         </div>
 
         {/* Interactive Market Selector Dropdown */}
         <button
           onClick={onOpenMarketModal}
-          className="flex items-center gap-2 sm:gap-3 text-lg md:text-xl font-bold text-white hover:text-brand transition-colors focus:outline-none bg-panel/40 hover:bg-panel border border-border/60 hover:border-brand px-2 sm:px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-all"
+          className="flex items-center gap-2 sm:gap-3 text-lg md:text-xl font-bold text-white hover:text-brand focus:outline-none bg-panel/40 hover:bg-panel border border-border/60 hover:border-brand px-2 sm:px-3 py-1.5 rounded-xl shadow-xs cursor-pointer transition-all"
           title="Click or press Ctrl+K to select from 200+ Markets"
         >
           <TokenLogo id={currentObj.symbol} />
@@ -142,9 +141,9 @@ export function MarketHeader({
 
       <div className="flex flex-wrap items-center gap-4 md:gap-6 text-sm w-full md:w-auto border-t md:border-none border-border/50 pt-3 md:pt-0">
         <div>
-          <div className="text-muted text-xs">{t('openInterest') || 'Global Skew'}</div>
-          <div className={`font-medium ${isSkewLong ? 'text-brand' : isSkewShort ? 'text-danger' : 'text-white'}`}>
-            {isSkewLong ? `+${skewDisplay} USDC` : `${skewDisplay} USDC`}
+          <div className="text-muted text-xs">{t('openInterest') || 'Open Interest'}</div>
+          <div className="font-medium text-white font-mono">
+            {openInterestDisplay} USDC
           </div>
         </div>
 

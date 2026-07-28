@@ -15,21 +15,17 @@ import { useLanguage } from './LanguageProvider';
 export default function Navbar() {
   const wallet = useWalletContext();
   const pathname = usePathname();
-  const [notifGranted, setNotifGranted] = useState<boolean>(false);
+  const [notifGranted, setNotifGranted] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? isNotificationGranted() : false
+  );
   const [showEcosystem, setShowEcosystem] = useState<boolean>(false);
   const [showLanguageModal, setShowLanguageModal] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
-  const [currentLanguage, setCurrentLanguage] = useState<string>('en');
-  const [currentNumberFormat, setCurrentNumberFormat] = useState<string>('1,234.56');
-  
+
   // Mobile responsive state
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setNotifGranted(isNotificationGranted());
-  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -104,7 +100,7 @@ export default function Navbar() {
             </button>
 
             {showEcosystem && (
-              <div className="absolute left-0 top-full mt-2 w-[540px] bg-panel/95 border border-border/80 rounded-2xl shadow-2xl backdrop-blur-2xl p-5 z-50 animate-fade-in grid grid-cols-3 gap-4">
+              <div className="absolute left-0 top-full mt-2 w-135 bg-panel/95 border border-border/80 rounded-2xl shadow-2xl backdrop-blur-2xl p-5 z-50 animate-fade-in grid grid-cols-3 gap-4">
                 
                 {/* Column 1: Developer Suite */}
                 <div className="flex flex-col gap-2">

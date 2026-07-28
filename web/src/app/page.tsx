@@ -348,11 +348,11 @@ export default function Home() {
   const firstPos = positions[0] || null;
 
   return (
-    <main className="flex min-h-[100dvh] w-full flex-col overflow-x-hidden overflow-y-auto lg:overflow-hidden">
+    <main className="flex min-h-dvh w-full flex-col overflow-x-hidden overflow-y-auto lg:overflow-hidden">
       {/* Main Trading Area */}
       <div className="flex flex-col lg:flex-row flex-1 lg:overflow-hidden">
         {/* Left Side: Chart and Positions */}
-        <div className="flex flex-1 flex-col border-b lg:border-b-0 lg:border-r border-border min-h-[600px] lg:min-h-0">
+        <div className="flex flex-1 flex-col border-b lg:border-b-0 lg:border-r border-border min-h-150 lg:min-h-0">
           <div className="flex-1 bg-background flex flex-col relative overflow-visible lg:overflow-hidden">
             <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand/10 blur-[100px] rounded-full pointer-events-none"></div>
             <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-brand/5 blur-[100px] rounded-full pointer-events-none"></div>
@@ -373,7 +373,7 @@ export default function Home() {
 
             <div className="flex-1 flex flex-col-reverse lg:flex-row lg:overflow-hidden w-full lg:h-full">
               <OrderBook currentPrice={currentPrice} symbol={selectedMarket} />
-              <div className="flex-1 flex min-h-[400px] lg:min-h-0 lg:h-full w-full relative overflow-hidden shrink-0 lg:shrink">
+              <div className="flex-1 flex min-h-100 lg:min-h-0 lg:h-full w-full relative overflow-hidden shrink-0 lg:shrink">
                 <TradingChart symbol={selectedMarket} />
               </div>
             </div>
