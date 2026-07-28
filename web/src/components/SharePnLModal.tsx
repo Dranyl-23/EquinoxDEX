@@ -26,7 +26,6 @@ export const SharePnLModal: React.FC<SharePnLModalProps> = ({
 
   if (!isOpen || !position) return null;
 
-  const rawMargin = position.margin / DECIMALS;
   const rawEntry = position.entry_price / DECIMALS;
   const shortAddr = publicKey ? `${publicKey.slice(0, 6)}...${publicKey.slice(-4)}` : 'GBBUS2...H056';
 

@@ -5,7 +5,6 @@ export default function ApiDocsPage() {
   const [copiedTab, setCopiedTab] = useState<string | null>(null);
   const [activeLang, setActiveLang] = useState<'curl' | 'ts' | 'python'>('ts');
   const [apiResult, setApiResult] = useState<string | null>(null);
-  const [loadingApi, setLoadingApi] = useState<boolean>(false);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -14,7 +13,6 @@ export default function ApiDocsPage() {
   };
 
   const testEndpoint = async (url: string) => {
-    setLoadingApi(true);
     setApiResult('Fetching live REST API endpoint...');
     try {
       const res = await fetch(url);
@@ -22,8 +20,6 @@ export default function ApiDocsPage() {
       setApiResult(JSON.stringify(data, null, 2));
     } catch (e: unknown) {
       setApiResult(`Error: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setLoadingApi(false);
     }
   };
 

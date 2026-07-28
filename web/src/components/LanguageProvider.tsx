@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { loadTranslations, DEFAULT_LANGUAGE } from '@/i18n';
+import enTranslations from '@/i18n/en';
 
 export type SupportedLanguage = 'en' | 'ceb' | 'zh' | 'ko' | 'ja' | 'es' | 'fr' | 'de' | 'vi' | 'tr';
 
@@ -135,7 +136,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<SupportedLanguage>(DEFAULT_LANGUAGE);
-  const [translations, setTranslations] = useState<Partial<Translations>>({});
+  const [translations, setTranslations] = useState<Partial<Translations>>(enTranslations);
   const [numberFormat, setNumberFormat] = useState<string>('1,234.56');
 
   useEffect(() => {
@@ -143,7 +144,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadTranslations(language).then((dict) => {
       if (active) setTranslations(dict);
     }).catch(() => {
-      if (active) setTranslations({});
+      if (active) setTranslations(enTranslations);
     });
     return () => { active = false; };
   }, [language]);

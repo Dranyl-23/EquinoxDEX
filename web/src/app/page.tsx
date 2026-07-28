@@ -29,7 +29,6 @@ import { SharePnLModal } from '@/components/SharePnLModal';
 import { TradingChart } from '@/components/TradingChart';
 import { DECIMALS, RPC_POLL_INTERVAL } from '@/lib/constants';
 import { useLivePrice } from '@/hooks/useLivePrice';
-import PnLShareCard from '@/components/PnLShareCard';
 import { useToast } from '@/components/Toast';
 
 // Modular Trading Components (H12 Refactor)
@@ -316,7 +315,6 @@ export default function Home() {
   // PnL Calc for all active positions
   let pnl = 0;
   let pnlPercent = 0;
-  let fundingPnl = 0;
   let totalMargin = 0;
 
   for (const pos of positions) {
@@ -336,7 +334,6 @@ export default function Home() {
       ? -(fundingDiff * positionSize) / 10_000_000_000
       : (fundingDiff * positionSize) / 10_000_000_000;
 
-    fundingPnl += posFundingPnl;
     pnl += pricePnl + posFundingPnl;
     totalMargin += rawMargin;
   }
@@ -386,9 +383,6 @@ export default function Home() {
             limitOrders={limitOrders}
             currentPrice={currentPrice}
             globalFunding={marketState.global_funding}
-            pnl={pnl}
-            pnlPercent={pnlPercent}
-            fundingPnl={fundingPnl}
             isSubmitting={isSubmitting}
             onClosePosition={handleClosePosition}
             onSharePnL={() => setShowShareCard(true)}

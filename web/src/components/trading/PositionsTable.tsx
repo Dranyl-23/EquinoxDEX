@@ -25,9 +25,6 @@ interface PositionsTableProps {
   limitOrders: Order[];
   currentPrice: number;
   globalFunding: number;
-  pnl: number;
-  pnlPercent: number;
-  fundingPnl: number;
   isSubmitting: boolean;
   onClosePosition: (positionId: number, pct?: number) => Promise<void>;
   onSharePnL: () => void;
@@ -43,9 +40,6 @@ export const PositionsTable: React.FC<PositionsTableProps> = ({
   limitOrders,
   currentPrice,
   globalFunding,
-  pnl,
-  pnlPercent,
-  fundingPnl,
   isSubmitting,
   onClosePosition,
   onSharePnL,

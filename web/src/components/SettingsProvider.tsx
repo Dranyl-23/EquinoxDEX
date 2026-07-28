@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 
 export interface TraderSettings {
   persistSession: boolean;
@@ -36,17 +36,16 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 const STORAGE_KEY = 'equinox_trader_settings_v1';
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<TraderSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<TraderSettings>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SETTINGS;
 
-  // Load settings from localStorage on mount
-  useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(saved) });
-      }
-    } catch {}
-  }, []);
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
 
   // Save settings to localStorage on change
   const saveToStorage = (newSettings: TraderSettings) => {

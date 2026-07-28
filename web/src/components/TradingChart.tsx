@@ -14,7 +14,6 @@ import {
   Eye,
   EyeOff,
   PenTool,
-  ChevronDown
 } from 'lucide-react';
 
 type Timeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
@@ -55,13 +54,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
   
   // Minimize/Maximize & Axis toggles
   const [showRightScale, setShowRightScale] = useState(true);
-  const [showTools, setShowTools] = useState(true);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setShowTools(window.innerWidth > 768);
-    }
-  }, []);
+  const [showTools, setShowTools] = useState(() => typeof window !== 'undefined' ? window.innerWidth > 768 : true);
 
   // Initialize Chart once & set up ResizeObserver for perfect timeScale visibility
   useEffect(() => {
@@ -90,7 +83,7 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
       },
       rightPriceScale: {
         borderColor: '#2a2f3a',
-        visible: showRightScale,
+        visible: true,
       },
     });
 
@@ -327,7 +320,6 @@ export const TradingChart = ({ symbol = 'BTCUSDT' }: { symbol?: string }) => {
     if (type === 'pattern') {
       // XABCD Pattern
       const midX = (startX + endX) / 2;
-      const midY = (startY + endY) / 2;
       const ptA = { x: startX, y: startY };
       const ptB = { x: startX + width * 0.3, y: maxY };
       const ptC = { x: midX, y: minY + height * 0.3 };

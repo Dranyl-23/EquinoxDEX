@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
         },
       }
     );
-  } catch (e: unknown) {
+  } catch {
     return NextResponse.json(
       { user, total: 0, positions: [], note: 'Failed to fetch on-chain state or user has no open positions' },
       { status: 200 }
