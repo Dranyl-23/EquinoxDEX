@@ -25,8 +25,11 @@ export default function TradingChart({ symbol, baseAsset, currentPrice }: Tradin
     }
   }, [currentPrice]);
 
-  // Static HTML document — loads Binance historical klines once and listens for price updates
-  const chartHtml = `
+  const chartSource = React.useMemo(() => {
+    const initialPrice = currentPrice > 0 ? currentPrice : 64320;
+    
+    // Static HTML document — loads Binance historical klines once and listens for price updates
+    const html = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -103,7 +106,7 @@ export default function TradingChart({ symbol, baseAsset, currentPrice }: Tradin
               })
               .catch(() => {
                 // Dynamic fallback aligned with live price
-                const basePrice = ${currentPrice > 0 ? currentPrice : 64320};
+                const basePrice = ${initialPrice};
                 const data = [];
                 let now = Math.floor(Date.now() / 1000) - (100 * 3600);
                 let price = basePrice * 0.98;
@@ -163,14 +166,16 @@ export default function TradingChart({ symbol, baseAsset, currentPrice }: Tradin
         </script>
       </body>
     </html>
-  `;
+    `;
+    return { html };
+  }, [symbol]); // Only re-create HTML when symbol changes
 
   return (
     <View style={styles.container}>
       <WebView
         ref={webViewRef}
         originWhitelist={['*']}
-        source={{ html: chartHtml }}
+        source={chartSource}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
