@@ -118,14 +118,14 @@ export async function sendTpSlTriggeredNotification(
 /**
  * Trigger a native system push notification warning when a position is near liquidation.
  */
-export async function sendLiquidationWarningNotification(symbol: string) {
+export async function sendLiquidationWarningNotification(symbol: string, isLong: boolean, leverage: number) {
   if (isExpoGo || !Notifications) return;
 
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: `🔴 Liquidation Risk Alert`,
-        body: `Your ${symbol} position is near its liquidation price. Add margin to prevent liquidation.`,
+        title: `🔴 DANGER: Liquidation Risk Alert`,
+        body: `Your ${isLong ? 'LONG' : 'SHORT'} ${leverage}x position on ${symbol} is within 5% of liquidation! Add margin or close position.`,
         sound: 'default',
       },
       trigger: null,

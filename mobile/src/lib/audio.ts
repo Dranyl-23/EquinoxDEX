@@ -38,6 +38,18 @@ class SoundEngine {
       // Fallback
     }
   }
+
+  async playError() {
+    if (!(await isSoundEnabled())) return;
+    try {
+      const player = createAudioPlayer({
+        uri: 'https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3', // Error/Alert sound
+      });
+      player.play();
+    } catch {
+      // Fallback
+    }
+  }
 }
 
 export const soundEngine = new SoundEngine();

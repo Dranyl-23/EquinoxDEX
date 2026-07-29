@@ -9,6 +9,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme';
 import { requestNotificationPermissions } from './src/lib/notifications';
 import { BiometricLockProvider } from './src/components/BiometricLockModal';
+import NetworkBanner from './src/components/NetworkBanner';
 
 // Keep splash screen visible while loading resources
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -48,6 +49,7 @@ export default function App() {
           <BiometricLockProvider>
             <NavigationContainer theme={DarkTheme}>
               <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+              <NetworkBanner />
               <AppNavigator />
             </NavigationContainer>
           </BiometricLockProvider>
