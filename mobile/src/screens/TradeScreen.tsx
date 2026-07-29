@@ -10,6 +10,7 @@ import {
   FlatList,
   ActivityIndicator,
   Switch,
+  Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as SecureStore from 'expo-secure-store';
@@ -283,6 +284,10 @@ export default function TradeScreen() {
         marginVal,
         leverage
       );
+      Alert.alert(
+        'Order Successful',
+        `Successfully placed ${leverage}x ${positionType} on ${selectedMarket.symbol}.`
+      );
 
       setMarginInput('');
       setTriggerInput('');
@@ -294,8 +299,12 @@ export default function TradeScreen() {
       await refreshBalances();
       const posList = await readPositions(wallet.publicKey);
       setPositions(posList);
-    } catch (err) {
+    } catch (err: any) {
       notificationError();
+      Alert.alert(
+        'Order Failed',
+        err?.message || 'An error occurred while placing the order. Please check your testnet balance.'
+      );
     } finally {
       setIsSubmittingOrder(false);
     }
@@ -322,6 +331,10 @@ export default function TradeScreen() {
 
       notificationSuccess();
       soundEngine.playPositionClosed();
+      Alert.alert(
+        'Position Closed',
+        `Successfully closed ${closePct}% of your position.`
+      );
 
       setCloseModalVisible(false);
       setSelectedPosForClose(null);
@@ -330,8 +343,12 @@ export default function TradeScreen() {
       await refreshBalances();
       const posList = await readPositions(wallet.publicKey);
       setPositions(posList);
-    } catch (err) {
+    } catch (err: any) {
       notificationError();
+      Alert.alert(
+        'Close Failed',
+        err?.message || 'An error occurred while closing the position.'
+      );
     } finally {
       setIsClosingPosition(false);
     }
