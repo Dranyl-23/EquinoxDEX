@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "EquinoxDEX",
+    "slug": "equinox-dex",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.equinoxdex.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0a0a0f"
+      },
+      "package": "com.equinoxdex.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-audio"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7e19d2ab-131e-491b-ac81-70b3dc96239e"
+      }
+    }
+  }
+}
