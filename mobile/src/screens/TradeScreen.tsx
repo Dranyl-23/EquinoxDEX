@@ -40,6 +40,7 @@ import {
 } from 'lucide-react-native';
 import PnLShareModal from '../components/PnLShareModal';
 import PriceAlertModal from '../components/PriceAlertModal';
+import PinSetupModal from '../components/PinSetupModal';
 import { usePriceAlertEngine } from '../hooks/usePriceAlertEngine';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
@@ -126,6 +127,7 @@ export default function TradeScreen() {
 
   // Biometric Hardware Lock State
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [pinSetupVisible, setPinSetupVisible] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   useEffect(() => {
@@ -137,9 +139,21 @@ export default function TradeScreen() {
 
   const handleToggleBiometric = async (value: boolean) => {
     impactMedium();
-    setBiometricEnabled(value);
-    await SecureStore.setItemAsync('equinox_biometric_enabled', value ? 'true' : 'false');
-    if (value) notificationSuccess();
+    if (value) {
+      setPinSetupVisible(true);
+    } else {
+      setBiometricEnabled(false);
+      await SecureStore.setItemAsync('equinox_biometric_enabled', 'false');
+      await SecureStore.deleteItemAsync('equinox_security_pin');
+    }
+  };
+
+  const handlePinSetupSuccess = async (pin: string) => {
+    setPinSetupVisible(false);
+    setBiometricEnabled(true);
+    await SecureStore.setItemAsync('equinox_security_pin', pin);
+    await SecureStore.setItemAsync('equinox_biometric_enabled', 'true');
+    notificationSuccess();
   };
 
   // Positions Tab
@@ -1360,6 +1374,11 @@ export default function TradeScreen() {
         onAddAlert={addPriceAlertItem}
         onRemoveAlert={removePriceAlertItem}
         onClearTriggered={clearTriggeredAlerts}
+      />
+      <PinSetupModal
+        visible={pinSetupVisible}
+        onClose={() => setPinSetupVisible(false)}
+        onSuccess={handlePinSetupSuccess}
       />
     </SafeAreaView>
   );

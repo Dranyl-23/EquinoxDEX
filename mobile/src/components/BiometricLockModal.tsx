@@ -32,12 +32,16 @@ export function BiometricLockProvider({ children }: BiometricLockProps) {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
+  const [storedPin, setStoredPin] = useState(DEFAULT_PIN);
 
   // Check if biometric is enabled on device
   useEffect(() => {
     (async () => {
       const enabled = await SecureStore.getItemAsync(BIOMETRIC_KEY);
       if (enabled === 'true') {
+        const pin = await SecureStore.getItemAsync(PIN_KEY);
+        if (pin) setStoredPin(pin);
+        
         setBiometricEnabled(true);
         setIsLocked(true);
       }
@@ -103,7 +107,7 @@ export function BiometricLockProvider({ children }: BiometricLockProps) {
       setPinInput(nextPin);
 
       if (nextPin.length === 6) {
-        if (nextPin === DEFAULT_PIN || nextPin === '000000') {
+        if (nextPin === storedPin) {
           handleUnlockSuccess();
         } else {
           notificationError();
