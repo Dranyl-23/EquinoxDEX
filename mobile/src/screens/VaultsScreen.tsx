@@ -8,6 +8,8 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -267,7 +269,10 @@ export default function VaultsScreen() {
         transparent={true}
         onRequestClose={() => setDepositModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xxl) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Deposit Vault Liquidity</Text>
@@ -324,7 +329,7 @@ export default function VaultsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Redeem Shares Modal */}
@@ -334,7 +339,10 @@ export default function VaultsScreen() {
         transparent={true}
         onRequestClose={() => setWithdrawModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xxl) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Redeem ELP Pool Shares</Text>
@@ -391,7 +399,7 @@ export default function VaultsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

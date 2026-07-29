@@ -8,6 +8,8 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Switch } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -385,7 +387,10 @@ export default function PortfolioScreen() {
         transparent={true}
         onRequestClose={() => setDepositModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xxl) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Deposit Margin Collateral</Text>
@@ -416,7 +421,7 @@ export default function PortfolioScreen() {
               )}
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Withdraw USDC Modal */}
@@ -426,7 +431,10 @@ export default function PortfolioScreen() {
         transparent={true}
         onRequestClose={() => setWithdrawModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom + spacing.lg, spacing.xxl) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Withdraw USDC</Text>
@@ -483,7 +491,7 @@ export default function PortfolioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Partial Close Modal */}
