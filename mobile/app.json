@@ -29,7 +29,9 @@
     "plugins": [
       "expo-secure-store",
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "expo-notifications",
+      "expo-local-authentication"
     ],
     "extra": {
       "eas": {

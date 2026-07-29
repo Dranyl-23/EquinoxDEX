@@ -6,6 +6,7 @@ import {
   Animated,
   Easing,
   Dimensions,
+  Image,
 } from 'react-native';
 import { ShieldCheck, Zap, Sparkles } from 'lucide-react-native';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
@@ -147,7 +148,10 @@ export default function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenP
           ]}
         >
           <View style={styles.logoBadge}>
-            <Zap size={44} color="#ffffff" />
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={{ width: 70, height: 70, borderRadius: 20 }} 
+            />
           </View>
         </Animated.View>
 
