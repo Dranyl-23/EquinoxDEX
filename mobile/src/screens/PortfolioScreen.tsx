@@ -42,6 +42,7 @@ import HelpSupportModal from '../components/HelpSupportModal';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
 import { readPositions, buildClosePositionXDR, Position } from '../lib/contract';
+import { fundTestnetAccount } from '../lib/stellar';
 import { DECIMALS } from '../lib/constants';
 import { impactLight, impactMedium, notificationSuccess, notificationError } from '../lib/haptics';
 import { soundEngine } from '../lib/audio';
@@ -156,10 +157,10 @@ export default function PortfolioScreen() {
     try {
       setIsFunding(true);
       setDepositSuccessMsg('');
-      await fetch(`https://friendbot.stellar.org?addr=${wallet.publicKey}`);
+      await fundTestnetAccount(wallet.publicKey, wallet.secretKey);
       await refreshBalances();
       notificationSuccess();
-      setDepositSuccessMsg('Successfully funded account with 10,000 Testnet XLM/USDC!');
+      setDepositSuccessMsg('Successfully funded account with Real On-Chain Testnet XLM & USDC!');
       setTimeout(() => setDepositSuccessMsg(''), 4000);
     } catch {
       notificationError();

@@ -26,9 +26,6 @@ export async function fetchBalances(publicKey: string): Promise<Balances> {
         usdc = parseFloat(b.balance).toFixed(2);
       }
     }
-    if (usdc === '0' || usdc === '0.00') {
-      usdc = '10000.00';
-    }
     return { xlm, usdc, funded: true };
   } catch {
     return { xlm: '0', usdc: '0', funded: false };
