@@ -10,6 +10,7 @@ import { colors } from './src/theme';
 import { requestNotificationPermissions } from './src/lib/notifications';
 import { BiometricLockProvider } from './src/components/BiometricLockModal';
 import NetworkBanner from './src/components/NetworkBanner';
+import AnimatedSplashScreen from './src/components/AnimatedSplashScreen';
 
 // Keep splash screen visible while loading resources
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -29,6 +30,8 @@ const DarkTheme = {
 };
 
 export default function App() {
+  const [showAnimatedSplash, setShowAnimatedSplash] = React.useState(true);
+
   useEffect(() => {
     (async () => {
       try {
@@ -36,7 +39,7 @@ export default function App() {
       } catch {
         // Ignore
       } finally {
-        // Smoothly hide splash screen once app resources are ready
+        // Smoothly hide native splash screen immediately so our animated splash takes over
         await SplashScreen.hideAsync().catch(() => {});
       }
     })();
@@ -49,6 +52,9 @@ export default function App() {
           <BiometricLockProvider>
             <NavigationContainer theme={DarkTheme}>
               <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+              {showAnimatedSplash && (
+                <AnimatedSplashScreen onFinish={() => setShowAnimatedSplash(false)} />
+              )}
               <NetworkBanner />
               <AppNavigator />
             </NavigationContainer>
