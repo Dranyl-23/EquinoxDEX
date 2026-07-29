@@ -315,9 +315,16 @@ export default function TradeScreen() {
       setPositions(posList);
     } catch (err: any) {
       notificationError();
+      const errorMsg = err?.message || '';
+      
+      let displayMsg = errorMsg || 'An error occurred while placing the order. Please check your testnet balance.';
+      if (errorMsg.includes('Account not found')) {
+        displayMsg = 'Wallet not funded on Testnet. Please go to the Portfolio screen and click the Faucet button to fund your account before trading.';
+      }
+
       Alert.alert(
         'Order Failed',
-        err?.message || 'An error occurred while placing the order. Please check your testnet balance.'
+        displayMsg
       );
     } finally {
       setIsSubmittingOrder(false);
