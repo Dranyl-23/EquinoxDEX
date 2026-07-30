@@ -68,48 +68,51 @@ export function usePriceAlertEngine(symbol: string, currentPrice: number) {
     prevPriceRef.current = currentPrice;
   }, [currentPrice, symbol, alerts]);
 
+  // Keep a ref of current price so interval doesn't re-create every second
+  const priceRef = useRef(currentPrice);
+  useEffect(() => {
+    priceRef.current = currentPrice;
+  }, [currentPrice]);
+
   // Liquidation Monitoring loop
   useEffect(() => {
-    if (!wallet?.publicKey || currentPrice <= 0) return;
+    if (!wallet?.publicKey) return;
 
     let isSubscribed = true;
 
     const checkLiquidations = async () => {
+      const livePx = priceRef.current;
+      if (livePx <= 0) return;
+
       try {
         const posList = await readPositions(wallet.publicKey);
         if (!isSubscribed) return;
 
         posList.forEach((pos) => {
-          if (pos.symbol && pos.symbol !== symbol) return; // Only check current market for simplicity, or we can assume livePrices for others later
+          if (pos.symbol && pos.symbol !== symbol) return;
 
           const entryPrice = pos.entry_price / DECIMALS;
           let liqPrice = 0;
           let isDanger = false;
 
           if (pos.is_long) {
-            // Margin wiped out when price drops by 1/Leverage
             liqPrice = entryPrice * (1 - 1 / pos.leverage);
-            // Danger if current price is within 5% of liquidation price (from above)
-            if (currentPrice <= liqPrice * 1.05) {
+            if (livePx <= liqPrice * 1.05) {
               isDanger = true;
             }
           } else {
-            // SHORT: Margin wiped out when price rises by 1/Leverage
             liqPrice = entryPrice * (1 + 1 / pos.leverage);
-            // Danger if current price is within 5% of liquidation price (from below)
-            if (currentPrice >= liqPrice * 0.95) {
+            if (livePx >= liqPrice * 0.95) {
               isDanger = true;
             }
           }
 
           if (isDanger && !notifiedLiquidations.current.has(pos.id)) {
-            // Trigger OS Notification
             sendLiquidationWarningNotification(pos.symbol, pos.is_long, pos.leverage);
             notificationError();
-            soundEngine.playError(); // Assuming playError exists, or use a specific alert sound
+            soundEngine.playError();
             notifiedLiquidations.current.add(pos.id);
           } else if (!isDanger) {
-            // Remove from notified set if the danger subsides
             notifiedLiquidations.current.delete(pos.id);
           }
         });
@@ -125,7 +128,7 @@ export function usePriceAlertEngine(symbol: string, currentPrice: number) {
       isSubscribed = false;
       clearInterval(interval);
     };
-  }, [wallet?.publicKey, currentPrice, symbol]);
+  }, [wallet?.publicKey, symbol]);
 
   const addAlert = async (targetPrice: number, condition: 'ABOVE' | 'BELOW') => {
     const list = await addAlertStorage(symbol, targetPrice, condition);

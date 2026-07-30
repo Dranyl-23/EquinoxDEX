@@ -39,27 +39,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const connect = async () => {
-    setLoading(true);
-    const newWallet = await createWallet();
-    // Fund via Friendbot on testnet
     try {
-      await fundTestnetAccount(newWallet.publicKey);
-    } catch {
-      // Account may already be funded
+      setLoading(true);
+      const newWallet = await createWallet();
+      // Fund via Friendbot on testnet
+      try {
+        await fundTestnetAccount(newWallet.publicKey);
+      } catch {
+        // Account may already be funded
+      }
+      setWallet(newWallet);
+      const bal = await fetchBalances(newWallet.publicKey);
+      setBalances(bal);
+    } catch (err) {
+      console.error('Failed to create wallet:', err);
+    } finally {
+      setLoading(false);
     }
-    setWallet(newWallet);
-    const bal = await fetchBalances(newWallet.publicKey);
-    setBalances(bal);
-    setLoading(false);
   };
 
   const importKey = async (secretKey: string) => {
-    setLoading(true);
-    const imported = await importWallet(secretKey);
-    setWallet(imported);
-    const bal = await fetchBalances(imported.publicKey);
-    setBalances(bal);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const imported = await importWallet(secretKey);
+      setWallet(imported);
+      const bal = await fetchBalances(imported.publicKey);
+      setBalances(bal);
+    } catch (err) {
+      console.error('Failed to import wallet key:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const disconnect = async () => {

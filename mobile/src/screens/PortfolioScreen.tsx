@@ -41,7 +41,7 @@ import PnLShareModal from '../components/PnLShareModal';
 import HelpSupportModal from '../components/HelpSupportModal';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
-import { readPositions, buildClosePositionXDR, Position } from '../lib/contract';
+import { readPositions, buildClosePositionXDR, buildWithdrawMarginXDR, Position } from '../lib/contract';
 import { fundTestnetAccount } from '../lib/stellar';
 import { DECIMALS } from '../lib/constants';
 import { impactLight, impactMedium, notificationSuccess, notificationError } from '../lib/haptics';
@@ -169,26 +169,36 @@ export default function PortfolioScreen() {
     }
   };
 
-  // Handle Withdraw Submission
+  // Handle Withdraw Submission (Real On-Chain Smart Contract Invocation)
   const handleWithdrawSubmit = async () => {
-    if (!withdrawAmount) return;
+    if (!wallet?.publicKey || !withdrawAmount) return;
     const amountVal = parseFloat(withdrawAmount);
     if (isNaN(amountVal) || amountVal <= 0) return;
 
     try {
       setIsWithdrawing(true);
       setWithdrawSuccessMsg('');
-      // Refresh balances
+      const amountScaled = Math.trunc(amountVal * DECIMALS);
+      const xdr = await buildWithdrawMarginXDR(wallet.publicKey, wallet.publicKey, amountScaled);
+      await signAndSubmit(xdr);
+
       await refreshBalances();
       notificationSuccess();
-      setWithdrawSuccessMsg(`Withdrawal of $${amountVal.toFixed(2)} USDC confirmed.`);
+      setWithdrawSuccessMsg(`Withdrawal of $${amountVal.toFixed(2)} USDC confirmed on-chain!`);
       setWithdrawAmount('');
       setTimeout(() => {
         setWithdrawSuccessMsg('');
         setWithdrawModalVisible(false);
       }, 2000);
-    } catch {
+    } catch (err: any) {
       notificationError();
+      const errorMsg = err?.message || '';
+      Alert.alert(
+        'Withdrawal Failed',
+        errorMsg.includes('Account not found')
+          ? 'Account not found on-chain. Please fund your account via Faucet first.'
+          : errorMsg || 'An error occurred during withdrawal.'
+      );
     } finally {
       setIsWithdrawing(false);
     }

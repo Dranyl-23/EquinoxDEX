@@ -248,6 +248,28 @@ export default function TradeScreen() {
     const marginVal = parseFloat(marginInput);
     if (isNaN(marginVal) || marginVal <= 0) return;
 
+    // Validation: Max Leverage check
+    if (leverage > selectedMarket.maxLeverage) {
+      notificationError();
+      Alert.alert(
+        'Validation Error',
+        `Selected leverage of ${leverage}x exceeds the maximum allowed leverage of ${selectedMarket.maxLeverage}x for ${selectedMarket.symbol}.`
+      );
+      return;
+    }
+
+    // Validation: Limit Order Trigger Price check
+    if (orderTab === 'Limit') {
+      if (!triggerInput || isNaN(parseFloat(triggerInput)) || parseFloat(triggerInput) <= 0) {
+        notificationError();
+        Alert.alert(
+          'Validation Error',
+          'Please enter a valid Trigger Price for your Limit order.'
+        );
+        return;
+      }
+    }
+
     try {
       setIsSubmittingOrder(true);
       const marginScaled = Math.trunc(marginVal * DECIMALS);
@@ -271,7 +293,7 @@ export default function TradeScreen() {
           trailingStopScaled
         );
       } else {
-        const triggerPx = triggerInput ? parseFloat(triggerInput) : currentPx;
+        const triggerPx = parseFloat(triggerInput);
         const triggerScaled = Math.trunc(triggerPx * DECIMALS);
         xdr = await buildPlaceLimitOrderXDR(
           wallet.publicKey,

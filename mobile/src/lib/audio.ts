@@ -15,13 +15,19 @@ export async function isSoundEnabled(): Promise<boolean> {
  * Respects user preferences in Settings.
  */
 class SoundEngine {
+  private orderPlayer: any = null;
+  private closePlayer: any = null;
+  private errorPlayer: any = null;
+
   async playOrderSubmitted() {
     if (!(await isSoundEnabled())) return;
     try {
-      const player = createAudioPlayer({
-        uri: 'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3',
-      });
-      player.play();
+      if (!this.orderPlayer) {
+        this.orderPlayer = createAudioPlayer({
+          uri: 'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3',
+        });
+      }
+      this.orderPlayer.play();
     } catch {
       // Fallback
     }
@@ -30,10 +36,12 @@ class SoundEngine {
   async playPositionClosed() {
     if (!(await isSoundEnabled())) return;
     try {
-      const player = createAudioPlayer({
-        uri: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-      });
-      player.play();
+      if (!this.closePlayer) {
+        this.closePlayer = createAudioPlayer({
+          uri: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
+        });
+      }
+      this.closePlayer.play();
     } catch {
       // Fallback
     }
@@ -42,10 +50,12 @@ class SoundEngine {
   async playError() {
     if (!(await isSoundEnabled())) return;
     try {
-      const player = createAudioPlayer({
-        uri: 'https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3', // Error/Alert sound
-      });
-      player.play();
+      if (!this.errorPlayer) {
+        this.errorPlayer = createAudioPlayer({
+          uri: 'https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3',
+        });
+      }
+      this.errorPlayer.play();
     } catch {
       // Fallback
     }

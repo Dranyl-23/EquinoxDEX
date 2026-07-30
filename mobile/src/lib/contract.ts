@@ -536,3 +536,35 @@ export async function buildRegisterReferralXDR(referee: string, referrer: string
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();
 }
+
+/** Build + simulate + assemble an unsigned `withdraw_margin` invocation */
+export async function buildWithdrawMarginXDR(
+  caller: string,
+  user: string,
+  amountScaled: number
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(caller);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'withdraw_margin',
+        new Address(caller).toScVal(),
+        new Address(user).toScVal(),
+        nativeToScVal(BigInt(Math.trunc(amountScaled)), { type: 'i128' })
+      )
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed to withdraw margin.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}

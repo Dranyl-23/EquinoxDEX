@@ -13,59 +13,51 @@ let hapticsEnabledCache = true;
   }
 })();
 
-export async function isHapticsEnabled(): Promise<boolean> {
-  try {
-    const val = await SecureStore.getItemAsync('equinox_haptics_enabled');
-    return val !== 'false';
-  } catch {
-    return true;
-  }
+export function updateHapticsCache(enabled: boolean) {
+  hapticsEnabledCache = enabled;
+  SecureStore.setItemAsync('equinox_haptics_enabled', enabled ? 'true' : 'false').catch(() => {});
+}
+
+export function isHapticsEnabled(): boolean {
+  return hapticsEnabledCache;
 }
 
 /**
  * Light impact feedback for subtle UI interactions (leverage chips, quick % buttons).
  */
 export function impactLight() {
-  (async () => {
-    if (!(await isHapticsEnabled())) return;
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {}
-  })();
+  if (!hapticsEnabledCache) return;
+  try {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  } catch {}
 }
 
 /**
  * Medium impact feedback for major UI switches (Long/Short toggle, Market/Limit tab).
  */
 export function impactMedium() {
-  (async () => {
-    if (!(await isHapticsEnabled())) return;
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {}
-  })();
+  if (!hapticsEnabledCache) return;
+  try {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch {}
 }
 
 /**
  * Success notification feedback (haptic pattern on on-chain transaction confirmation).
  */
 export function notificationSuccess() {
-  (async () => {
-    if (!(await isHapticsEnabled())) return;
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {}
-  })();
+  if (!hapticsEnabledCache) return;
+  try {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch {}
 }
 
 /**
  * Error notification feedback (haptic pattern on rejected transaction or invalid input).
  */
 export function notificationError() {
-  (async () => {
-    if (!(await isHapticsEnabled())) return;
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } catch {}
-  })();
+  if (!hapticsEnabledCache) return;
+  try {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  } catch {}
 }
