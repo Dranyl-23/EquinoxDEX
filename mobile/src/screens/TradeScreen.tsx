@@ -821,7 +821,7 @@ export default function TradeScreen() {
 
           {/* Order Summary Box: Estimated Liquidation Price & Position Size */}
           {marginInput ? (
-            <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: borderRadius.md, padding: spacing.md, marginVertical: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.brand }}>
+            <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: borderRadius.md, padding: spacing.md, marginVertical: spacing.md }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Position Size</Text>
                 <Text style={{ color: colors.textPrimary, fontSize: fontSize.xs, fontWeight: '700', fontFamily: 'Courier' }}>
