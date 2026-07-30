@@ -162,7 +162,15 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
               <View style={styles.inputRow}>
                 <TextInput
                   style={[styles.input, { color: colors.success }]}
-                  value={amount ? `~${amount}` : '0.00'}
+                  value={
+                    amount
+                      ? `~${(
+                          sendAsset === 'XLM' 
+                            ? parseFloat(amount) * 0.10 
+                            : parseFloat(amount) * 10
+                        ).toFixed(2)}`
+                      : '0.00'
+                  }
                   editable={false}
                 />
                 <View style={styles.tokenBadge}>
