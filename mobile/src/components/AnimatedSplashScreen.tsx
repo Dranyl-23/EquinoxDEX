@@ -31,7 +31,7 @@ export default function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenP
 
   useEffect(() => {
     // 1. Continuous pulsing glow animation
-    Animated.loop(
+    const loopAnim = Animated.loop(
       Animated.sequence([
         Animated.parallel([
           Animated.timing(glowScale, {
@@ -60,10 +60,11 @@ export default function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenP
           }),
         ]),
       ])
-    ).start();
+    );
+    loopAnim.start();
 
     // 2. Entrance sequence
-    Animated.sequence([
+    const sequenceAnim = Animated.sequence([
       // Logo Spring Entrance
       Animated.parallel([
         Animated.spring(logoScale, {
@@ -99,7 +100,9 @@ export default function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenP
         easing: Easing.bezier(0.4, 0, 0.2, 1),
         useNativeDriver: false, // width animation
       }),
-    ]).start(() => {
+    ]);
+
+    sequenceAnim.start(() => {
       // 3. Smooth Fade Out to App
       Animated.timing(splashOpacity, {
         toValue: 0,
@@ -110,6 +113,11 @@ export default function AnimatedSplashScreen({ onFinish }: AnimatedSplashScreenP
         onFinish();
       });
     });
+
+    return () => {
+      loopAnim.stop();
+      sequenceAnim.stop();
+    };
   }, []);
 
   if (isDone) return null;

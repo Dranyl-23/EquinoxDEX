@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -98,6 +98,14 @@ export function BiometricLockProvider({ children }: BiometricLockProps) {
     setPinError(false);
   };
 
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   // Custom PIN Input Handler
   const handlePinPress = (digit: string) => {
     impactLight();
@@ -112,7 +120,8 @@ export function BiometricLockProvider({ children }: BiometricLockProps) {
         } else {
           notificationError();
           setPinError(true);
-          setTimeout(() => {
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => {
             setPinInput('');
             setPinError(false);
           }, 800);

@@ -15,6 +15,8 @@ export default function NetworkBanner() {
   // Track previous state to know when we've just reconnected
   const prevConnected = useRef(true);
 
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     // NetInfo might be null initially
     if (netInfo.isConnected === null) return;
@@ -36,7 +38,8 @@ export default function NetworkBanner() {
       setShowRestored(true);
       
       // Hide the "Restored" banner after 3 seconds
-      setTimeout(() => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
         Animated.timing(translateY, {
           toValue: -100,
           duration: 300,
@@ -48,6 +51,10 @@ export default function NetworkBanner() {
     }
 
     prevConnected.current = currentlyConnected;
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [netInfo.isConnected, translateY]);
 
   if (!isOffline && !showRestored) {

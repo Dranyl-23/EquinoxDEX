@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { Switch } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -138,7 +140,7 @@ export default function PortfolioScreen() {
     };
 
     fetchPositions();
-    const interval = setInterval(fetchPositions, 5000);
+    const interval = setInterval(fetchPositions, 10000); // 10s interval
     return () => {
       isSubscribed = false;
       clearInterval(interval);
@@ -240,9 +242,34 @@ export default function PortfolioScreen() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshBalances();
+      if (wallet?.publicKey) {
+        const posList = await readPositions(wallet.publicKey);
+        setPositions(posList);
+      }
+    } catch {}
+    setRefreshing(false);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Portfolio</Text>

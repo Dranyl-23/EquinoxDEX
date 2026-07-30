@@ -33,13 +33,14 @@ export default function PnLShareModal({
   if (!position) return null;
 
   const entryPx = position.entry_price / DECIMALS;
-  const markPx = currentPrice > 0 ? currentPrice : entryPx;
+  const isPriceAvailable = currentPrice > 0;
+  const markPx = isPriceAvailable ? currentPrice : entryPx;
   const isLong = position.is_long;
   const leverage = position.leverage || 1;
 
   // Compute ROI percentage
   const priceDiff = isLong ? markPx - entryPx : entryPx - markPx;
-  const roiPct = entryPx > 0 ? ((priceDiff / entryPx) * leverage) * 100 : 0;
+  const roiPct = (entryPx > 0 && isPriceAvailable) ? ((priceDiff / entryPx) * leverage) * 100 : 0;
   const isProfit = roiPct >= 0;
 
   const refUrl = `https://equinoxdex.vercel.app/?ref=${referralCode || 'TRADER'}`;

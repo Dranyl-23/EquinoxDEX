@@ -58,9 +58,16 @@ export default function HelpSupportModal({ visible, onClose }: HelpSupportModalP
     setExpandedFaq(expandedFaq === index ? null : index);
   };
 
-  const openSocialLink = (url: string) => {
+  const openSocialLink = async (url: string) => {
     impactMedium();
-    Linking.openURL(url).catch(() => {});
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch {
+      // Graceful fallback
+    }
   };
 
   return (

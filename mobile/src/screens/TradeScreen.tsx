@@ -190,7 +190,7 @@ export default function TradeScreen() {
     };
 
     fetchOnChain();
-    const interval = setInterval(fetchOnChain, 5000);
+    const interval = setInterval(fetchOnChain, 10000); // 10s interval
     return () => {
       isSubscribed = false;
       clearInterval(interval);
@@ -776,6 +776,33 @@ export default function TradeScreen() {
               </View>
             </View>
           )}
+
+          {/* Order Summary Box: Estimated Liquidation Price & Position Size */}
+          {marginInput ? (
+            <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: borderRadius.md, padding: spacing.md, marginVertical: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.brand }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Position Size</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: fontSize.xs, fontWeight: '700', fontFamily: 'Courier' }}>
+                  ${((parseFloat(marginInput) || 0) * leverage).toLocaleString('en-US', { minimumFractionDigits: 2 })} USDC
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Est. Liquidation Price</Text>
+                <Text style={{ color: colors.warning, fontSize: fontSize.xs, fontWeight: '700', fontFamily: 'Courier' }}>
+                  ${(positionType === 'Long'
+                    ? (livePriceData.price || selectedMarket.displayPrice || 67000) * (1 - 1 / leverage)
+                    : (livePriceData.price || selectedMarket.displayPrice || 67000) * (1 + 1 / leverage)
+                  ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>Est. Trading Fee (0.1%)</Text>
+                <Text style={{ color: colors.textMuted, fontSize: fontSize.xs, fontFamily: 'Courier' }}>
+                  ${(((parseFloat(marginInput) || 0) * leverage) * 0.001).toFixed(2)} USDC
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           {/* Action Submit Button */}
           {!connected ? (

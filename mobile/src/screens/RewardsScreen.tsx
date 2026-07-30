@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Share,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -59,7 +60,7 @@ export default function RewardsScreen() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 10000);
+    const interval = setInterval(fetchStats, 60000); // 60s interval
     return () => {
       isSubscribed = false;
       clearInterval(interval);
@@ -111,9 +112,37 @@ export default function RewardsScreen() {
     totalVolume >= tier.minVol ? tier : prev, VIP_TIERS[0]);
   const nextTier = VIP_TIERS[VIP_TIERS.indexOf(currentTier) + 1];
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      if (wallet?.publicKey) {
+        const [refData, mktData] = await Promise.all([
+          readReferralStats(wallet.publicKey),
+          readMarketState(),
+        ]);
+        setStats(refData);
+        setTotalVolume(mktData.total_volume / DECIMALS);
+      }
+    } catch {}
+    setRefreshing(false);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+          />
+        }
+      >
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Gift size={24} color={colors.brand} />

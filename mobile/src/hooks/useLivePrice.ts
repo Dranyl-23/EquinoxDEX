@@ -27,6 +27,8 @@ export function useLivePrice(symbol: string): LivePriceData {
     
     let ws: WebSocket | null = null;
     let isMounted = true;
+    let pollInterval: NodeJS.Timeout | null = null;
+
     const startPolling = () => {
       if (pollInterval || !isMounted) return;
       pollInterval = setInterval(fetchRestPrice, 2000);

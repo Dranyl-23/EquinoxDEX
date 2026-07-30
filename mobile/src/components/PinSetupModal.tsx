@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,14 @@ export default function PinSetupModal({ visible, onClose, onSuccess }: PinSetupM
     onClose();
   };
 
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
   const handlePinPress = (digit: string) => {
     impactLight();
     setPinError(false);
@@ -48,7 +56,8 @@ export default function PinSetupModal({ visible, onClose, onSuccess }: PinSetupM
       if (nextPin.length === 6) {
         if (step === 'ENTER') {
           // Move to confirm step
-          setTimeout(() => {
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => {
             setFirstPin(nextPin);
             setCurrentPin('');
             setStep('CONFIRM');
@@ -57,14 +66,16 @@ export default function PinSetupModal({ visible, onClose, onSuccess }: PinSetupM
           // Validate confirmation
           if (nextPin === firstPin) {
             notificationSuccess();
-            setTimeout(() => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            timerRef.current = setTimeout(() => {
               onSuccess(nextPin);
               resetState();
             }, 300);
           } else {
             notificationError();
             setPinError(true);
-            setTimeout(() => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            timerRef.current = setTimeout(() => {
               setCurrentPin('');
               setPinError(false);
             }, 800);
