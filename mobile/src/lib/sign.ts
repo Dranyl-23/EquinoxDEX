@@ -38,7 +38,13 @@ export async function signAndSubmitHorizon(xdr: string): Promise<string> {
     throw new Error('No wallet found. Please create or import a wallet first.');
   }
 
-  const tx = TransactionBuilder.fromXDR(xdr, NETWORK_PASSPHRASE);
+  let tx;
+  try {
+    tx = TransactionBuilder.fromXDR(xdr, NETWORK_PASSPHRASE);
+  } catch (e: any) {
+    throw new Error(`Parse Error: ${e.message}`);
+  }
+
   const keypair = Keypair.fromSecret(wallet.secretKey);
   tx.sign(keypair);
 

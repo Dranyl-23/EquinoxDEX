@@ -120,5 +120,5 @@ export async function buildSwapXDR(
   );
 
   const tx = txBuilder.setTimeout(60).build();
-  return tx.toXDR();
+  return tx.toEnvelope().toXDR('base64');
 }

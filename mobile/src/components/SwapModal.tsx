@@ -75,8 +75,9 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
       onSuccess();
       onClose();
     } catch (err: any) {
+      console.error('Swap Error:', err);
       notificationError();
-      Alert.alert('Swap Failed', err?.message || 'Transaction was rejected.');
+      Alert.alert('Swap Failed', err.message + '\n\n' + (err.stack ? err.stack.substring(0, 500) : ''));
     } finally {
       setIsSwapping(false);
     }
@@ -110,7 +111,7 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
               <View style={styles.inputRow}>
                 <TextInput
                   style={styles.input}
-                  placeholder="0.00"
+                  placeholder="e.g. 100"
                   placeholderTextColor={colors.textDim}
                   keyboardType="numeric"
                   value={amount}
