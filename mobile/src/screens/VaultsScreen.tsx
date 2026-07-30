@@ -135,7 +135,10 @@ export default function VaultsScreen() {
     try {
       setIsWithdrawing(true);
       setWithdrawSuccessMsg('');
-      const sharesScaled = Math.trunc(sharesVal * DECIMALS);
+      let sharesScaled = Math.trunc(sharesVal * DECIMALS);
+      if (poolState && sharesVal >= poolState.userShares / DECIMALS) {
+        sharesScaled = poolState.userShares;
+      }
 
       const xdr = await buildRemoveLiquidityXDR(
         wallet.publicKey,

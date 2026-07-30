@@ -14,8 +14,8 @@ export const horizonServer = new Horizon.Server(HORIZON_URL);
 export const XLM = Asset.native();
 export const USDC = new Asset('USDC', USDC_ISSUER);
 
-// Testnet SAC addresses
-export const USDC_TOKEN_ID = 'CBIELTK6YBZJU67VBKDS5V2P4IZZWVE7LOOK4RQHBQWUDT5DSSZLV6OJ';
+import { USDC_TOKEN_ID } from './constants';
+export { USDC_TOKEN_ID };
 export const XLM_TOKEN_ID = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
 
 /** Fund a testnet account via Friendbot (~10,000 XLM) and swap 1000 XLM to real on-chain USDC. */

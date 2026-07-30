@@ -15,12 +15,14 @@ interface LeaderboardItem {
 export default function LeaderboardScreen() {
   const [data, setData] = useState<LeaderboardItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let isSubscribed = true;
 
     const fetchLeaderboard = async () => {
       try {
+        setHasError(false);
         const raw = await readLeaderboard();
         if (!isSubscribed) return;
 
@@ -35,14 +37,14 @@ export default function LeaderboardScreen() {
           setData([]);
         }
       } catch {
-        if (isSubscribed) setData([]);
+        if (isSubscribed) setHasError(true);
       } finally {
         if (isSubscribed) setLoading(false);
       }
     };
 
     fetchLeaderboard();
-    const interval = setInterval(fetchLeaderboard, 5000);
+    const interval = setInterval(fetchLeaderboard, 30000); // 30s interval
     return () => {
       isSubscribed = false;
       clearInterval(interval);
@@ -99,6 +101,14 @@ export default function LeaderboardScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.brand} />
+        </View>
+      ) : hasError ? (
+        <View style={styles.emptyContainer}>
+          <Sparkles size={32} color={colors.danger} />
+          <Text style={styles.emptyTitle}>Network Error</Text>
+          <Text style={styles.emptySub}>
+            Could not fetch leaderboard data from Stellar RPC node. Please check your connection.
+          </Text>
         </View>
       ) : data.length > 0 ? (
         <FlatList

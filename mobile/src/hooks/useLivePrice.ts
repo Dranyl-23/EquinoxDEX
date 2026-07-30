@@ -27,7 +27,10 @@ export function useLivePrice(symbol: string): LivePriceData {
     
     let ws: WebSocket | null = null;
     let isMounted = true;
-    let pollInterval: NodeJS.Timeout | null = null;
+    const startPolling = () => {
+      if (pollInterval || !isMounted) return;
+      pollInterval = setInterval(fetchRestPrice, 2000);
+    };
 
     // Fallback REST fetch function if WebSocket is blocked by ISP or slow
     const fetchRestPrice = async () => {
@@ -45,19 +48,16 @@ export function useLivePrice(symbol: string): LivePriceData {
               connected: true,
             });
           }
+        } else if (isMounted) {
+          setData((prev) => ({ ...prev, connected: false }));
         }
       } catch {
-        // Fallback simulated micro-fluctuation if network is offline
+        // If network is offline, set connected: false (do NOT fake connected status)
         if (isMounted) {
-          setData((prev) => {
-            if (prev.price === 0) return prev;
-            const delta = (Math.random() - 0.49) * (prev.price * 0.0008);
-            return {
-              ...prev,
-              price: parseFloat((prev.price + delta).toFixed(2)),
-              connected: true,
-            };
-          });
+          setData((prev) => ({
+            ...prev,
+            connected: false,
+          }));
         }
       }
     };
@@ -92,19 +92,14 @@ export function useLivePrice(symbol: string): LivePriceData {
       };
 
       ws.onerror = () => {
-        // Switch to 1s REST polling if WebSocket errs
-        if (!pollInterval) {
-          pollInterval = setInterval(fetchRestPrice, 1000);
-        }
+        startPolling();
       };
 
       ws.onclose = () => {
-        if (!pollInterval) {
-          pollInterval = setInterval(fetchRestPrice, 1000);
-        }
+        startPolling();
       };
     } catch {
-      pollInterval = setInterval(fetchRestPrice, 1000);
+      startPolling();
     }
 
     return () => {
@@ -114,6 +109,7 @@ export function useLivePrice(symbol: string): LivePriceData {
       }
       if (pollInterval) {
         clearInterval(pollInterval);
+        pollInterval = null;
       }
     };
   }, [symbol]);
