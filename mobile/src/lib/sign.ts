@@ -32,23 +32,7 @@ export async function signAndSubmit(xdr: string): Promise<string> {
  */
 import { horizonServer } from './stellar';
 
-export async function signAndSubmitHorizon(xdr: string): Promise<string> {
-  const wallet = await loadWallet();
-  if (!wallet) {
-    throw new Error('No wallet found. Please create or import a wallet first.');
-  }
-
-  let tx;
-  try {
-    tx = TransactionBuilder.fromXDR(xdr, NETWORK_PASSPHRASE);
-  } catch (e: any) {
-    throw new Error(`Parse Error: ${e.message}`);
-  }
-
-  const keypair = Keypair.fromSecret(wallet.secretKey);
-  tx.sign(keypair);
-
-  const signedXdr = tx.toXDR();
+export async function submitHorizon(signedXdr: string): Promise<string> {
   const body = new URLSearchParams();
   body.append('tx', signedXdr);
 

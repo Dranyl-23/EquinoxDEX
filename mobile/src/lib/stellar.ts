@@ -75,6 +75,7 @@ export async function fundTestnetAccount(publicKey: string, secretKey?: string):
  */
 export async function buildSwapXDR(
   publicKey: string,
+  secretKey: string,
   sendToken: 'XLM' | 'USDC',
   amountStr: string
 ): Promise<string> {
@@ -120,5 +121,10 @@ export async function buildSwapXDR(
   );
 
   const tx = txBuilder.setTimeout(60).build();
+  
+  // Sign directly to bypass fromXDR issues in React Native
+  const keypair = Keypair.fromSecret(secretKey);
+  tx.sign(keypair);
+
   return tx.toEnvelope().toXDR('base64');
 }

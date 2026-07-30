@@ -12,8 +12,8 @@ import {
 import { X, ArrowDownUp, RefreshCw } from 'lucide-react-native';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
+import { submitHorizon } from '../lib/sign';
 import { buildSwapXDR } from '../lib/stellar';
-import { signAndSubmitHorizon } from '../lib/sign';
 import { impactLight, impactMedium, notificationSuccess, notificationError } from '../lib/haptics';
 
 interface SwapModalProps {
@@ -62,11 +62,13 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
       return;
     }
 
+    let currentXdr = '';
     try {
       impactMedium();
       setIsSwapping(true);
 
       const xdr = await buildSwapXDR(wallet.publicKey, sendAsset, amountVal.toString());
+      currentXdr = typeof xdr + ' : ' + String(xdr).substring(0, 50);
       await signAndSubmitHorizon(xdr);
 
       await refreshBalances();
@@ -77,7 +79,7 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
     } catch (err: any) {
       console.error('Swap Error:', err);
       notificationError();
-      Alert.alert('Swap Failed', err.message + '\n\n' + (err.stack ? err.stack.substring(0, 500) : ''));
+      Alert.alert('Swap Failed', err.message + '\n\nXDR Info: ' + currentXdr);
     } finally {
       setIsSwapping(false);
     }
