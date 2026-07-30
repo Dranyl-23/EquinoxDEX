@@ -13,7 +13,7 @@ import { X, ArrowDownUp, RefreshCw } from 'lucide-react-native';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
 import { buildSwapXDR } from '../lib/stellar';
-import { signAndSubmit } from '../lib/sign';
+import { signAndSubmitHorizon } from '../lib/sign';
 import { impactLight, impactMedium, notificationSuccess, notificationError } from '../lib/haptics';
 
 interface SwapModalProps {
@@ -67,7 +67,7 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
       setIsSwapping(true);
 
       const xdr = await buildSwapXDR(wallet.publicKey, sendAsset, amountVal.toString());
-      await signAndSubmit(xdr);
+      await signAndSubmitHorizon(xdr);
 
       await refreshBalances();
       notificationSuccess();

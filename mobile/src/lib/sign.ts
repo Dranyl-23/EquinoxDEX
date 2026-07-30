@@ -26,3 +26,25 @@ export async function signAndSubmit(xdr: string): Promise<string> {
   await pollTransaction(hash);
   return hash;
 }
+
+/**
+ * Sign and submit a classic transaction directly to Horizon instead of Soroban RPC.
+ */
+import { horizonServer } from './stellar';
+
+export async function signAndSubmitHorizon(xdr: string): Promise<string> {
+  const wallet = await loadWallet();
+  if (!wallet) {
+    throw new Error('No wallet found. Please create or import a wallet first.');
+  }
+
+  const tx = TransactionBuilder.fromXDR(xdr, NETWORK_PASSPHRASE);
+  const keypair = Keypair.fromSecret(wallet.secretKey);
+  tx.sign(keypair);
+
+  const res = await horizonServer.submitTransaction(tx);
+  if (!res.successful) {
+    throw new Error(`Horizon submit failed: ${JSON.stringify(res.extras?.result_codes)}`);
+  }
+  return res.hash;
+}
