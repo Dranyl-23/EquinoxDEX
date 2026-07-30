@@ -192,11 +192,12 @@ export default function TradingChart({ symbol, baseAsset, currentPrice }: Tradin
 
 const styles = StyleSheet.create({
   container: {
-    height: 220,
+    height: 250,
     width: '100%',
     backgroundColor: colors.surface,
   },
   webview: {
+    flex: 1,
     backgroundColor: colors.surface,
   },
   loadingContainer: {
