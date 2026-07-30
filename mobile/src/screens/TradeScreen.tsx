@@ -725,7 +725,13 @@ export default function TradeScreen() {
                 onPress={() => {
                   impactLight();
                   const avail = balances ? parseFloat(balances.usdc) || 0 : 0;
-                  setMarginInput(((avail * pct) / 100).toFixed(2));
+                  const calculated = ((avail * pct) / 100).toFixed(2);
+                  if (avail === 0) {
+                    import('react-native').then(({ Alert }) => {
+                      Alert.alert('Zero Balance', `Your USDC balance is 0 (balances.usdc: ${balances?.usdc}). Please check your connection or claim faucet.`);
+                    });
+                  }
+                  setMarginInput(calculated);
                 }}
               >
                 <Text style={styles.quickPctText}>{pct === 100 ? 'MAX' : `${pct}%`}</Text>
