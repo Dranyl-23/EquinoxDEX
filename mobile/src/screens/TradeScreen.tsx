@@ -481,7 +481,11 @@ export default function TradeScreen() {
           </View>
         </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scroll} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Price & 24h Ticker Bar */}
         <View style={styles.tickerBar}>
           <View style={styles.priceContainer}>
