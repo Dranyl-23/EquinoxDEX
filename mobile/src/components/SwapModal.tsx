@@ -67,9 +67,9 @@ export default function SwapModal({ visible, onClose, onSuccess }: SwapModalProp
       impactMedium();
       setIsSwapping(true);
 
-      const xdr = await buildSwapXDR(wallet.publicKey, sendAsset, amountVal.toString());
+      const xdr = await buildSwapXDR(wallet.publicKey, wallet.secretKey, sendAsset, amountVal.toString());
       currentXdr = typeof xdr + ' : ' + String(xdr).substring(0, 50);
-      await signAndSubmitHorizon(xdr);
+      await submitHorizon(xdr);
 
       await refreshBalances();
       notificationSuccess();
