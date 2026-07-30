@@ -47,7 +47,7 @@ import PinSetupModal from '../components/PinSetupModal';
 import SwapModal from '../components/SwapModal';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
-import { readPositions, buildClosePositionXDR, buildWithdrawMarginXDR, Position } from '../lib/contract';
+import { readPositions, buildClosePositionXDR, buildWithdrawMarginXDR, readMarginBalance, Position } from '../lib/contract';
 import { fundTestnetAccount } from '../lib/stellar';
 import { DECIMALS } from '../lib/constants';
 import { impactLight, impactMedium, notificationSuccess, notificationError } from '../lib/haptics';
@@ -58,6 +58,7 @@ export default function PortfolioScreen() {
   const insets = useSafeAreaInsets();
   const { wallet, balances, connected, refreshBalances, disconnect } = useWalletContext();
   const [positions, setPositions] = useState<Position[]>([]);
+  const [smartContractMargin, setSmartContractMargin] = useState<number>(0);
   const [loadingPositions, setLoadingPositions] = useState(false);
 
   // Deposit Modal State
@@ -184,9 +185,13 @@ export default function PortfolioScreen() {
 
     const fetchPositions = async () => {
       try {
-        const posList = await readPositions(wallet.publicKey);
+        const [posList, margin] = await Promise.all([
+          readPositions(wallet.publicKey),
+          readMarginBalance(wallet.publicKey)
+        ]);
         if (isSubscribed) {
           setPositions(posList);
+          setSmartContractMargin(margin / DECIMALS);
         }
       } catch {
         // Silently swallow
@@ -550,7 +555,7 @@ export default function PortfolioScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs }}>
                   <Text style={styles.bcLabel}>Withdraw Amount</Text>
                   <Text style={styles.bcLabel}>
-                    Avail: ${balances?.usdc || '0.00'} USDC
+                    Avail: ${smartContractMargin.toFixed(2)} USDC
                   </Text>
                 </View>
                 <View style={styles.inputBox}>
@@ -565,7 +570,7 @@ export default function PortfolioScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       impactLight();
-                      setWithdrawAmount(balances?.usdc || '0');
+                      setWithdrawAmount(smartContractMargin.toString());
                     }}
                   >
                     <Text style={{ color: colors.brand, fontSize: fontSize.xs, fontWeight: '700' }}>MAX</Text>

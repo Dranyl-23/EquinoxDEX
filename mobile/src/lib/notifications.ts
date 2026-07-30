@@ -66,17 +66,23 @@ export async function sendOrderExecutedNotification(
   symbol: string,
   isLong: boolean,
   margin: number,
-  leverage: number
+  leverage: number,
+  orderType: 'Market' | 'Limit' = 'Market'
 ) {
   if (isExpoGo || !Notifications) return;
 
   try {
     const sideText = isLong ? 'BUY / LONG' : 'SELL / SHORT';
+    const title = orderType === 'Limit' ? `⏳ Limit Order Placed — ${symbol}` : `🚀 Order Executed — ${symbol}`;
+    const body = orderType === 'Limit' 
+      ? `Waiting for trigger. ${sideText} ${leverage}x | Margin: $${margin.toFixed(2)} USDC`
+      : `${sideText} ${leverage}x | Margin: $${margin.toFixed(2)} USDC`;
+
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: `🚀 Order Executed — ${symbol}`,
-        body: `${sideText} ${leverage}x | Margin: $${margin.toFixed(2)} USDC`,
-        data: { symbol, isLong, margin, leverage },
+        title,
+        body,
+        data: { symbol, isLong, margin, leverage, orderType },
         sound: 'default',
       },
       trigger: null,

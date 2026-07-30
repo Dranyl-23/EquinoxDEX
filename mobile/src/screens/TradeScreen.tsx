@@ -308,6 +308,37 @@ export default function TradeScreen() {
       }
     }
 
+    // Validation: TP/SL Checks
+    const entryPx = orderTab === 'Limit' ? parseFloat(triggerInput) : (livePriceData.price || selectedMarket.displayPrice || 67000);
+    const tpPx = parseFloat(tpInput);
+    const slPx = parseFloat(slInput);
+    const isLongPos = positionType === 'Long';
+
+    if (!isNaN(tpPx) && tpPx > 0) {
+      if (isLongPos && tpPx <= entryPx) {
+        notificationError();
+        Alert.alert('Validation Error', 'Take Profit must be higher than your Entry Price for a Long position.');
+        return;
+      }
+      if (!isLongPos && tpPx >= entryPx) {
+        notificationError();
+        Alert.alert('Validation Error', 'Take Profit must be lower than your Entry Price for a Short position.');
+        return;
+      }
+    }
+    if (!isNaN(slPx) && slPx > 0) {
+      if (isLongPos && slPx >= entryPx) {
+        notificationError();
+        Alert.alert('Validation Error', 'Stop Loss must be lower than your Entry Price for a Long position.');
+        return;
+      }
+      if (!isLongPos && slPx <= entryPx) {
+        notificationError();
+        Alert.alert('Validation Error', 'Stop Loss must be higher than your Entry Price for a Short position.');
+        return;
+      }
+    }
+
     try {
       setIsSubmittingOrder(true);
       const marginScaled = Math.trunc(marginVal * DECIMALS);
@@ -356,11 +387,14 @@ export default function TradeScreen() {
         `${selectedMarket.baseAsset}/USDC`,
         positionType === 'Long',
         marginVal,
-        leverage
+        leverage,
+        orderTab
       );
       Alert.alert(
-        'Order Successful',
-        `Successfully placed ${leverage}x ${positionType} on ${selectedMarket.symbol}.`
+        orderTab === 'Limit' ? 'Limit Order Placed' : 'Order Successful',
+        orderTab === 'Limit' 
+          ? `Successfully placed ${leverage}x ${positionType} Limit on ${selectedMarket.symbol}. Waiting for trigger.`
+          : `Successfully executed ${leverage}x ${positionType} Market on ${selectedMarket.symbol}.`
       );
 
       setMarginInput('');
