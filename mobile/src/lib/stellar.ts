@@ -30,6 +30,9 @@ export async function fundTestnetAccount(publicKey: string, secretKey?: string):
   // If secret key is supplied, open USDC trustline & swap XLM for real USDC on SDEX
   if (secretKey) {
     try {
+      // Wait a few seconds for Horizon to ingest the newly created account from Friendbot
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       const account = await horizonServer.loadAccount(publicKey);
       const usdcAsset = new Asset('USDC', USDC_ISSUER);
       
@@ -53,8 +56,9 @@ export async function fundTestnetAccount(publicKey: string, secretKey?: string):
       const pair = Keypair.fromSecret(secretKey);
       tx.sign(pair);
       await horizonServer.submitTransaction(tx);
-    } catch {
-      // If swap fails or trustline exists, ignore gracefully
+    } catch (err) {
+      console.error('Faucet Swap to USDC Failed:', err);
+      throw new Error('XLM funded, but USDC swap failed. Try swapping manually using the Swap button.');
     }
   }
 }
