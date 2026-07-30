@@ -42,9 +42,23 @@ export async function signAndSubmitHorizon(xdr: string): Promise<string> {
   const keypair = Keypair.fromSecret(wallet.secretKey);
   tx.sign(keypair);
 
-  const res = await horizonServer.submitTransaction(tx);
-  if (!res.successful) {
-    throw new Error(`Horizon submit failed: ${JSON.stringify(res.extras?.result_codes)}`);
+  const signedXdr = tx.toXDR();
+  const body = new URLSearchParams();
+  body.append('tx', signedXdr);
+
+  const res = await fetch('https://horizon-testnet.stellar.org/transactions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const codes = data.extras?.result_codes;
+    throw new Error(`Horizon failed: ${JSON.stringify(codes)}`);
   }
-  return res.hash;
+  
+  return data.hash;
 }
