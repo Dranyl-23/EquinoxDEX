@@ -59,3 +59,53 @@ export async function fundTestnetAccount(publicKey: string, secretKey?: string):
   }
 }
 
+/**
+ * Build an XDR to swap between XLM and USDC on the native Stellar DEX.
+ * Uses pathPaymentStrictSend to execute at market price.
+ */
+export async function buildSwapXDR(
+  publicKey: string,
+  sendToken: 'XLM' | 'USDC',
+  amountStr: string
+): Promise<string> {
+  const account = await horizonServer.loadAccount(publicKey);
+  const usdcAsset = new Asset('USDC', USDC_ISSUER);
+
+  const txBuilder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  });
+
+  // If swapping TO USDC, ensure the trustline exists just in case
+  if (sendToken === 'XLM') {
+    let hasTrustline = false;
+    for (const b of account.balances) {
+      if (
+        (b.asset_type === 'credit_alphanum4' || b.asset_type === 'credit_alphanum12') &&
+        b.asset_code === 'USDC'
+      ) {
+        hasTrustline = true;
+        break;
+      }
+    }
+    if (!hasTrustline) {
+      txBuilder.addOperation(Operation.changeTrust({ asset: usdcAsset }));
+    }
+  }
+
+  const sendAsset = sendToken === 'XLM' ? Asset.native() : usdcAsset;
+  const destAsset = sendToken === 'XLM' ? usdcAsset : Asset.native();
+
+  txBuilder.addOperation(
+    Operation.pathPaymentStrictSend({
+      sendAsset,
+      sendAmount: amountStr,
+      destAsset,
+      destMin: '0', // Accept any rate for testnet demo purposes
+      destination: publicKey,
+    })
+  );
+
+  const tx = txBuilder.setTimeout(60).build();
+  return tx.toXDR();
+}

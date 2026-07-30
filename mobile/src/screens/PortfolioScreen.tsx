@@ -38,11 +38,13 @@ import {
   Clipboard as ClipboardIcon,
   HelpCircle,
   ChevronRight,
+  RefreshCw,
 } from 'lucide-react-native';
 import PnLShareModal from '../components/PnLShareModal';
 import HelpSupportModal from '../components/HelpSupportModal';
 import AuthMethodModal from '../components/AuthMethodModal';
 import PinSetupModal from '../components/PinSetupModal';
+import SwapModal from '../components/SwapModal';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
 import { readPositions, buildClosePositionXDR, buildWithdrawMarginXDR, Position } from '../lib/contract';
@@ -69,6 +71,9 @@ export default function PortfolioScreen() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawSuccessMsg, setWithdrawSuccessMsg] = useState('');
+
+  // Swap Modal State
+  const [swapModalVisible, setSwapModalVisible] = useState(false);
 
   // Partial Close Modal State
   const [selectedPosForClose, setSelectedPosForClose] = useState<Position | null>(null);
@@ -363,7 +368,7 @@ export default function PortfolioScreen() {
           </View>
         </View>
 
-        {/* Deposit / Withdraw Buttons */}
+        {/* Action Buttons */}
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.depositBtn}
@@ -372,8 +377,8 @@ export default function PortfolioScreen() {
               setDepositModalVisible(true);
             }}
           >
-            <ArrowDownLeft size={18} color="#ffffff" />
-            <Text style={styles.depositBtnText}>Deposit Margin</Text>
+            <ArrowDownLeft size={16} color="#ffffff" />
+            <Text style={styles.depositBtnText}>Deposit</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.withdrawBtn}
@@ -382,8 +387,18 @@ export default function PortfolioScreen() {
               setWithdrawModalVisible(true);
             }}
           >
-            <ArrowUpRight size={18} color={colors.textSecondary} />
+            <ArrowUpRight size={16} color={colors.textSecondary} />
             <Text style={styles.withdrawBtnText}>Withdraw</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.swapBtn}
+            onPress={() => {
+              impactMedium();
+              setSwapModalVisible(true);
+            }}
+          >
+            <RefreshCw size={16} color={colors.textSecondary} />
+            <Text style={styles.withdrawBtnText}>Swap</Text>
           </TouchableOpacity>
         </View>
 
@@ -651,7 +666,13 @@ export default function PortfolioScreen() {
         </View>
       </Modal>
 
-      {/* PnL Share Card Modal */}
+      {/* Modals */}
+      <SwapModal
+        visible={swapModalVisible}
+        onClose={() => setSwapModalVisible(false)}
+        onSuccess={() => {}}
+      />
+      
       <PnLShareModal
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
@@ -942,11 +963,12 @@ const styles = StyleSheet.create({
   closePosBtn: { backgroundColor: 'rgba(239, 68, 68, 0.15)', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.danger },
   closePosText: { color: colors.danger, fontSize: fontSize.xs, fontWeight: '700' },
 
-  actionRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  actionRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   depositBtn: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.brand, paddingVertical: spacing.md, borderRadius: borderRadius.md },
-  depositBtnText: { color: '#fff', fontSize: fontSize.md, fontWeight: '700' },
+  depositBtnText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
   withdrawBtn: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, borderRadius: borderRadius.md },
-  withdrawBtnText: { color: colors.textSecondary, fontSize: fontSize.md, fontWeight: '600' },
+  withdrawBtnText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  swapBtn: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.md, borderRadius: borderRadius.md },
 
   section: { paddingHorizontal: spacing.lg, marginTop: spacing.xxl, marginBottom: spacing.xxxl },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
