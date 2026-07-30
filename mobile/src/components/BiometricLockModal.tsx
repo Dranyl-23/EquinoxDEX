@@ -18,6 +18,7 @@ import { soundEngine } from '../lib/audio';
 import * as SecureStore from 'expo-secure-store';
 
 const BIOMETRIC_KEY = 'equinox_biometric_enabled';
+const AUTH_METHOD_KEY = 'equinox_auth_method';
 const PIN_KEY = 'equinox_security_pin';
 const DEFAULT_PIN = '123456'; // Default security PIN
 
@@ -28,22 +29,36 @@ export interface BiometricLockProps {
 export function BiometricLockProvider({ children }: BiometricLockProps) {
   const insets = useSafeAreaInsets();
   const [isLocked, setIsLocked] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [authMethod, setAuthMethod] = useState<'biometric' | 'pin' | 'none'>('none');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const [storedPin, setStoredPin] = useState(DEFAULT_PIN);
 
-  // Check if biometric is enabled on device
+  // Check auth method on device load
   useEffect(() => {
     (async () => {
-      const enabled = await SecureStore.getItemAsync(BIOMETRIC_KEY);
-      if (enabled === 'true') {
+      const method = await SecureStore.getItemAsync(AUTH_METHOD_KEY);
+      const oldBio = await SecureStore.getItemAsync(BIOMETRIC_KEY);
+      
+      let finalMethod: 'biometric' | 'pin' | 'none' = 'none';
+      if (method === 'biometric' || method === 'pin') {
+        finalMethod = method;
+      } else if (oldBio === 'true') {
+        finalMethod = 'biometric';
+      }
+
+      setAuthMethod(finalMethod);
+
+      if (finalMethod !== 'none') {
         const pin = await SecureStore.getItemAsync(PIN_KEY);
         if (pin) setStoredPin(pin);
         
-        setBiometricEnabled(true);
         setIsLocked(true);
+        if (finalMethod === 'biometric') {
+          // Add slight delay to allow modal to mount before native prompt
+          setTimeout(triggerHardwareBiometrics, 300);
+        }
       }
     })();
   }, []);
@@ -51,16 +66,18 @@ export function BiometricLockProvider({ children }: BiometricLockProps) {
   // Lock app when returning from background
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && biometricEnabled) {
+      if (nextAppState === 'active' && authMethod !== 'none') {
         setIsLocked(true);
-        triggerHardwareBiometrics();
+        if (authMethod === 'biometric') {
+          triggerHardwareBiometrics();
+        }
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [biometricEnabled]);
+  }, [authMethod]);
 
   // Hardware Biometric Authentication Trigger
   const triggerHardwareBiometrics = async () => {
@@ -161,21 +178,31 @@ export function BiometricLockProvider({ children }: BiometricLockProps) {
             </View>
           </View>
 
-          {/* Central Pulsing Biometric Ring */}
+          {/* Central Pulsing Biometric Ring (Only if Biometric enabled) */}
           <View style={styles.centralSection}>
-            <TouchableOpacity
-              style={styles.biometricRingOuter}
-              onPress={triggerHardwareBiometrics}
-              disabled={authenticating}
-            >
-              <View style={styles.biometricRingInner}>
-                <Fingerprint size={48} color={colors.brand} />
-              </View>
-            </TouchableOpacity>
+            {authMethod === 'biometric' && (
+              <>
+                <TouchableOpacity
+                  style={styles.biometricRingOuter}
+                  onPress={triggerHardwareBiometrics}
+                  disabled={authenticating}
+                >
+                  <View style={styles.biometricRingInner}>
+                    <Fingerprint size={48} color={colors.brand} />
+                  </View>
+                </TouchableOpacity>
 
-            <Text style={styles.lockStatusText}>
-              {authenticating ? 'Authenticating...' : 'Touch Sensor or Scan Face to Unlock'}
-            </Text>
+                <Text style={styles.lockStatusText}>
+                  {authenticating ? 'Authenticating...' : 'Touch Sensor or Scan Face to Unlock'}
+                </Text>
+              </>
+            )}
+
+            {authMethod === 'pin' && (
+              <Text style={[styles.lockStatusText, { marginTop: spacing.xl, marginBottom: spacing.md }]}>
+                Enter your 6-Digit Security PIN
+              </Text>
+            )}
 
             {/* PIN Indicator Dots */}
             <View style={styles.dotsRow}>

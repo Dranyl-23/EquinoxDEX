@@ -37,10 +37,12 @@ import {
   Check,
   Fingerprint,
   Bell,
+  ChevronRight,
 } from 'lucide-react-native';
 import PnLShareModal from '../components/PnLShareModal';
 import PriceAlertModal from '../components/PriceAlertModal';
 import PinSetupModal from '../components/PinSetupModal';
+import AuthMethodModal from '../components/AuthMethodModal';
 import { usePriceAlertEngine } from '../hooks/usePriceAlertEngine';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
@@ -125,35 +127,71 @@ export default function TradeScreen() {
     activeAlertsCount,
   } = usePriceAlertEngine(selectedMarket.symbol, livePriceData.price);
 
-  // Biometric Hardware Lock State
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  // Authentication State
+  const [authMethod, setAuthMethod] = useState<'biometric' | 'pin' | 'none'>('none');
+  const [authModalVisible, setAuthModalVisible] = useState(false);
   const [pinSetupVisible, setPinSetupVisible] = useState(false);
+  const [pendingAuthMethod, setPendingAuthMethod] = useState<'biometric' | 'pin' | null>(null);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const enabled = await SecureStore.getItemAsync('equinox_biometric_enabled');
-      if (enabled === 'true') setBiometricEnabled(true);
+      const method = await SecureStore.getItemAsync('equinox_auth_method');
+      const oldBio = await SecureStore.getItemAsync('equinox_biometric_enabled');
+      if (method === 'biometric' || method === 'pin') {
+        setAuthMethod(method);
+      } else if (oldBio === 'true') {
+        setAuthMethod('biometric');
+      }
     })();
   }, []);
 
-  const handleToggleBiometric = async (value: boolean) => {
-    impactMedium();
-    if (value) {
-      setPinSetupVisible(true);
+  const handleSelectAuthMethod = async (method: 'biometric' | 'pin' | 'none') => {
+    setAuthModalVisible(false);
+    if (method === 'none') {
+      setAuthMethod('none');
+      await SecureStore.setItemAsync('equinox_auth_method', 'none');
+      notificationSuccess();
+      return;
+    }
+    
+    // For PIN or Biometric, setup PIN as fallback/primary
+    if (method === 'biometric') {
+      import('expo-local-authentication').then(async (LocalAuth) => {
+        try {
+          const hasHardware = await LocalAuth.hasHardwareAsync();
+          const isEnrolled = await LocalAuth.isEnrolledAsync();
+          if (!hasHardware || !isEnrolled) {
+            import('react-native').then(({ Alert }) => {
+              Alert.alert('Not Available', 'Biometric authentication is not set up on this device.');
+            });
+            return;
+          }
+          setPendingAuthMethod('biometric');
+          setPinSetupVisible(true);
+        } catch {
+          import('react-native').then(({ Alert }) => {
+            Alert.alert('Error', 'Failed to check biometric status.');
+          });
+        }
+      });
     } else {
-      setBiometricEnabled(false);
-      await SecureStore.setItemAsync('equinox_biometric_enabled', 'false');
-      await SecureStore.deleteItemAsync('equinox_security_pin');
+      setPendingAuthMethod('pin');
+      setPinSetupVisible(true);
     }
   };
 
   const handlePinSetupSuccess = async (pin: string) => {
     setPinSetupVisible(false);
-    setBiometricEnabled(true);
-    await SecureStore.setItemAsync('equinox_security_pin', pin);
-    await SecureStore.setItemAsync('equinox_biometric_enabled', 'true');
-    notificationSuccess();
+    if (pendingAuthMethod) {
+      setAuthMethod(pendingAuthMethod);
+      await SecureStore.setItemAsync('equinox_security_pin', pin);
+      await SecureStore.setItemAsync('equinox_auth_method', pendingAuthMethod);
+      // Legacy compatibility
+      await SecureStore.setItemAsync('equinox_biometric_enabled', pendingAuthMethod === 'biometric' ? 'true' : 'false');
+      notificationSuccess();
+      setPendingAuthMethod(null);
+    }
   };
 
   // Positions Tab
@@ -1155,21 +1193,21 @@ export default function TradeScreen() {
                 )}
 
                 {/* Biometric Hardware Security Toggle Card */}
-                <View style={styles.biometricToggleCard}>
+                <TouchableOpacity 
+                  style={styles.biometricToggleCard}
+                  onPress={() => setAuthModalVisible(true)}
+                >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 }}>
                     <Fingerprint size={18} color={colors.brand} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.biometricToggleTitle}>Biometric Lock (Face ID / Touch)</Text>
-                      <Text style={styles.biometricToggleSub}>Require biometric hardware scan when launching app</Text>
+                      <Text style={styles.biometricToggleTitle}>Set Authentication</Text>
+                      <Text style={styles.biometricToggleSub}>
+                        {authMethod === 'biometric' ? 'Face ID / Touch ID' : authMethod === 'pin' ? 'PIN Only' : 'None'}
+                      </Text>
                     </View>
                   </View>
-                  <Switch
-                    trackColor={{ false: colors.border, true: 'rgba(16, 185, 129, 0.4)' }}
-                    thumbColor={biometricEnabled ? colors.brand : colors.textMuted}
-                    value={biometricEnabled}
-                    onValueChange={handleToggleBiometric}
-                  />
-                </View>
+                  <ChevronRight size={18} color={colors.textMuted} />
+                </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.disconnectBtn}
@@ -1435,6 +1473,12 @@ export default function TradeScreen() {
         visible={pinSetupVisible}
         onClose={() => setPinSetupVisible(false)}
         onSuccess={handlePinSetupSuccess}
+      />
+      <AuthMethodModal
+        visible={authModalVisible}
+        onClose={() => setAuthModalVisible(false)}
+        onSelect={handleSelectAuthMethod}
+        currentMethod={authMethod}
       />
     </SafeAreaView>
   );

@@ -41,6 +41,8 @@ import {
 } from 'lucide-react-native';
 import PnLShareModal from '../components/PnLShareModal';
 import HelpSupportModal from '../components/HelpSupportModal';
+import AuthMethodModal from '../components/AuthMethodModal';
+import PinSetupModal from '../components/PinSetupModal';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
 import { useWalletContext } from '../providers/WalletProvider';
 import { readPositions, buildClosePositionXDR, buildWithdrawMarginXDR, Position } from '../lib/contract';
@@ -85,14 +87,24 @@ export default function PortfolioScreen() {
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [copiedSecretKey, setCopiedSecretKey] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [authMethod, setAuthMethod] = useState<'biometric' | 'pin' | 'none'>('none');
+  const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [pinSetupVisible, setPinSetupVisible] = useState(false);
+  const [pendingAuthMethod, setPendingAuthMethod] = useState<'biometric' | 'pin' | null>(null);
+
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const bio = await SecureStore.getItemAsync('equinox_biometric_enabled');
-      if (bio === 'true') setBiometricEnabled(true);
+      const method = await SecureStore.getItemAsync('equinox_auth_method');
+      const oldBio = await SecureStore.getItemAsync('equinox_biometric_enabled');
+      if (method === 'biometric' || method === 'pin') {
+        setAuthMethod(method);
+      } else if (oldBio === 'true') {
+        setAuthMethod('biometric');
+      }
+
       const hap = await SecureStore.getItemAsync('equinox_haptics_enabled');
       if (hap === 'false') setHapticsEnabled(false);
       const snd = await SecureStore.getItemAsync('equinox_sound_enabled');
@@ -100,11 +112,48 @@ export default function PortfolioScreen() {
     })();
   }, []);
 
-  const handleToggleBiometric = async (val: boolean) => {
-    impactMedium();
-    setBiometricEnabled(val);
-    await SecureStore.setItemAsync('equinox_biometric_enabled', val ? 'true' : 'false');
-    if (val) notificationSuccess();
+  const handleSelectAuthMethod = async (method: 'biometric' | 'pin' | 'none') => {
+    setAuthModalVisible(false);
+    if (method === 'none') {
+      setAuthMethod('none');
+      await SecureStore.setItemAsync('equinox_auth_method', 'none');
+      notificationSuccess();
+      return;
+    }
+    
+    // For PIN or Biometric, setup PIN as fallback/primary
+    if (method === 'biometric') {
+      import('expo-local-authentication').then(async (LocalAuth) => {
+        try {
+          const hasHardware = await LocalAuth.hasHardwareAsync();
+          const isEnrolled = await LocalAuth.isEnrolledAsync();
+          if (!hasHardware || !isEnrolled) {
+            Alert.alert('Not Available', 'Biometric authentication is not set up on this device.');
+            return;
+          }
+          setPendingAuthMethod('biometric');
+          setPinSetupVisible(true);
+        } catch {
+          Alert.alert('Error', 'Failed to check biometric status.');
+        }
+      });
+    } else {
+      setPendingAuthMethod('pin');
+      setPinSetupVisible(true);
+    }
+  };
+
+  const handlePinSetupSuccess = async (pin: string) => {
+    setPinSetupVisible(false);
+    if (pendingAuthMethod) {
+      setAuthMethod(pendingAuthMethod);
+      await SecureStore.setItemAsync('equinox_security_pin', pin);
+      await SecureStore.setItemAsync('equinox_auth_method', pendingAuthMethod);
+      // Legacy compatibility
+      await SecureStore.setItemAsync('equinox_biometric_enabled', pendingAuthMethod === 'biometric' ? 'true' : 'false');
+      notificationSuccess();
+      setPendingAuthMethod(null);
+    }
   };
 
   const handleToggleHaptics = async (val: boolean) => {
@@ -707,21 +756,22 @@ export default function PortfolioScreen() {
                 {/* Section 2: Security & Hardware Locks */}
                 <View style={styles.settingsSection}>
                   <Text style={styles.settingsSectionTitle}>SECURITY & PRIVACY</Text>
-                  <View style={styles.settingsCardRow}>
+                  
+                  <TouchableOpacity 
+                    style={styles.settingsCardRow}
+                    onPress={() => setAuthModalVisible(true)}
+                  >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 }}>
                       <Fingerprint size={18} color={colors.brand} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.settingLabel}>Biometric Hardware Lock</Text>
-                        <Text style={styles.settingSub}>Face ID / Touch ID screen lock</Text>
+                        <Text style={styles.settingLabel}>Set Authentication</Text>
+                        <Text style={styles.settingSub}>
+                          {authMethod === 'biometric' ? 'Face ID / Touch ID' : authMethod === 'pin' ? 'PIN Only' : 'None'}
+                        </Text>
                       </View>
                     </View>
-                    <Switch
-                      trackColor={{ false: colors.border, true: 'rgba(16, 185, 129, 0.4)' }}
-                      thumbColor={biometricEnabled ? colors.brand : colors.textMuted}
-                      value={biometricEnabled}
-                      onValueChange={handleToggleBiometric}
-                    />
-                  </View>
+                    <ChevronRight size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
 
                 {/* Section 3: Preferences & Audio */}
@@ -851,6 +901,19 @@ export default function PortfolioScreen() {
           </View>
         </View>
       </Modal>
+
+      <AuthMethodModal
+        visible={authModalVisible}
+        onClose={() => setAuthModalVisible(false)}
+        onSelect={handleSelectAuthMethod}
+        currentMethod={authMethod}
+      />
+
+      <PinSetupModal
+        visible={pinSetupVisible}
+        onClose={() => setPinSetupVisible(false)}
+        onSuccess={handlePinSetupSuccess}
+      />
     </SafeAreaView>
   );
 }
