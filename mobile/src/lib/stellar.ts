@@ -56,9 +56,15 @@ export async function fundTestnetAccount(publicKey: string, secretKey?: string):
       const pair = Keypair.fromSecret(secretKey);
       tx.sign(pair);
       await horizonServer.submitTransaction(tx);
-    } catch (err) {
-      console.error('Faucet Swap to USDC Failed:', err);
-      throw new Error('XLM funded, but USDC swap failed. Try swapping manually using the Swap button.');
+    } catch (err: any) {
+      const resultCodes = err?.response?.data?.extras?.result_codes;
+      console.error('Faucet Swap to USDC Failed:', err.message, resultCodes);
+      
+      if (resultCodes?.operations?.includes('op_no_destination')) {
+        throw new Error('XLM funded, but USDC swap failed (No liquidity path). Use Swap feature manually.');
+      } else {
+        throw new Error(`XLM funded, but USDC swap failed: ${resultCodes?.transaction || 'Unknown'}. Use Swap feature manually.`);
+      }
     }
   }
 }
@@ -100,12 +106,15 @@ export async function buildSwapXDR(
   const sendAsset = sendToken === 'XLM' ? Asset.native() : usdcAsset;
   const destAsset = sendToken === 'XLM' ? usdcAsset : Asset.native();
 
+  // Ensure amount has at most 7 decimals
+  const formattedAmount = Number(amountStr).toFixed(7).replace(/\.?0+$/, '');
+
   txBuilder.addOperation(
     Operation.pathPaymentStrictSend({
       sendAsset,
-      sendAmount: amountStr,
+      sendAmount: formattedAmount,
       destAsset,
-      destMin: '0', // Accept any rate for testnet demo purposes
+      destMin: '0.0000001', // Must be strictly positive
       destination: publicKey,
     })
   );
